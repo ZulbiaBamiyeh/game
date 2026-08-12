@@ -19,7 +19,7 @@
   /* Vertical scale is set by one rule: a person has to read as a person in the
      room. Ceiling to floor is 90 logical pixels and a visitor is 33 of them —
      a bit over a third, which is roughly a gallery with a high ceiling.
-     Multiple storeys stack: each floor is FLOOR_PITCH tall in world space. */
+     Storeys: floor 0 ground, +1 upper (above on screen), −1 basement (below). */
   const H = 170;                 /* logical height of one floor band */
   const FLOOR_PITCH = 178;       /* world-y step between storeys */
   const FLOOR_Y = 112;           /* where the back wall meets the floor (local) */
@@ -158,13 +158,18 @@
   }
 
   function makeStairs(x, floor, toFloor) {
+    let name = "Stairs", period = "", short = "Stairs";
+    if (floor === 0 && toFloor > 0) {
+      name = "Grand stair"; period = "up to the first floor"; short = "Up";
+    } else if (floor > 0 && toFloor === 0) {
+      name = "Upper landing"; period = "down to the ground floor"; short = "Down";
+    } else if (floor === 0 && toFloor < 0) {
+      name = "Basement stair"; period = "down to the basement"; short = "Down";
+    } else if (floor < 0 && toFloor === 0) {
+      name = "Basement landing"; period = "up to the ground floor"; short = "Up";
+    }
     return {
-      era: {
-        id: "stairs-" + floor + "-" + toFloor,
-        name: floor === 0 ? "Grand stair" : "Landing",
-        period: toFloor > floor ? "to the upper floor" : "to the ground floor",
-        short: "Stairs",
-      },
+      era: { id: "stairs-" + floor + "-" + toFloor, name, period, short },
       x, width: STAIRS_W, floor, exhibits: [], items: [], benches: [],
       stairs: true, stairsTo: toFloor, amenity: "stairs",
       serviceX: x + STAIRS_W / 2,
@@ -272,17 +277,26 @@
     for (const b of groundGals)
       pushGalleryRoom(rooms, ground, b.meta, b.items, 0, roomPad);
 
-    /* Stairs at the end of the ground run when there is an upper floor. */
-    let stairsX = ground.x;
+    /* Stairs at the end of the ground run. */
+    let stairsUpX = ground.x;
     if (hasUpper) {
       rooms.push(makeStairs(ground.x, 0, 1));
-      stairsX = ground.x;
+      stairsUpX = ground.x;
       ground.x += STAIRS_W + DOOR;
     }
 
-    /* Upper floor: landing, remaining halls, research, deep gallery. */
+    /* Basement stair — deep gallery lives below ground, not above. */
+    const hasBasement = deepLvl > 0;
+    let stairsDownX = ground.x;
+    if (hasBasement) {
+      rooms.push(makeStairs(ground.x, 0, -1));
+      stairsDownX = ground.x;
+      ground.x += STAIRS_W + DOOR;
+    }
+
+    /* Upper floor: above ground (floor +1). Research + overflow galleries. */
     if (hasUpper) {
-      const upper = { x: stairsX };
+      const upper = { x: stairsUpX };
       rooms.push(makeStairs(upper.x, 1, 0));
       upper.x += STAIRS_W + DOOR;
 
@@ -297,43 +311,52 @@
         upper.x += rw + DOOR;
       }
 
-      if (deepLvl > 0) {
-        const dw = 210 + Math.min(6, deepLvl) * 14;
-        rooms.push(amenityRoom("deepgal", "The deep gallery", "low light · thick glass", dw, upper.x, 1, {
-          deepgal: deepLvl,
-        }));
-        upper.x += dw + DOOR;
-      }
-
-      /* Empty upper landing if nothing upstairs yet except stairs. */
-      if (upperGals.length === 0 && researchLvl <= 0 && deepLvl <= 0) {
+      if (upperGals.length === 0 && researchLvl <= 0) {
         rooms.push(amenityRoom("landing", "Upper landing", "awaiting hang", 200, upper.x, 1, {
           wing: true, wingIndex: 0,
         }));
       }
     }
 
+    /* Basement: below ground (floor −1). Low light, deep material. */
+    if (hasBasement) {
+      const bas = { x: stairsDownX };
+      rooms.push(makeStairs(bas.x, -1, 0));
+      bas.x += STAIRS_W + DOOR;
+      const dw = 220 + Math.min(6, deepLvl) * 14;
+      rooms.push(amenityRoom("deepgal", "The deep gallery", "low light · thick glass", dw, bas.x, -1, {
+        deepgal: deepLvl,
+      }));
+    }
+
     if (!rooms.length) {
       return {
         rooms: [], exhibits: [], benches: [], stairs: [],
-        total: VIEW_FALLBACK, totalH: H, floors: 1, H, FLOOR_Y, FLOOR_PITCH,
+        total: VIEW_FALLBACK, totalH: H, floors: 1,
+        minFloor: 0, maxFloor: 0, yMin: 0, yMax: H,
+        H, FLOOR_Y, FLOOR_PITCH,
       };
     }
 
-    let maxX = 0, maxFloor = 0;
+    let maxX = 0, maxFloor = 0, minFloor = 0;
     const exhibits = [], benches = [], stairs = [];
     for (const r of rooms) {
       maxX = Math.max(maxX, r.x + r.width);
       maxFloor = Math.max(maxFloor, r.floor || 0);
+      minFloor = Math.min(minFloor, r.floor || 0);
       if (r.stairs) stairs.push(r);
       for (const e of r.exhibits) { e.room = r; e.floor = r.floor || 0; exhibits.push(e); }
       for (const b of r.benches) { b.room = r; b.floor = r.floor || 0; benches.push(b); }
     }
+    /* World Y: upper floors negative (above), basement positive (below). */
+    const yMin = floorBase(maxFloor);
+    const yMax = floorBase(minFloor) + H;
     return {
       rooms, exhibits, benches, stairs,
       total: maxX,
-      totalH: (maxFloor + 1) * FLOOR_PITCH,
-      floors: maxFloor + 1,
+      totalH: yMax - yMin,
+      floors: maxFloor - minFloor + 1,
+      minFloor, maxFloor, yMin, yMax,
       H, FLOOR_Y, FLOOR_PITCH,
     };
   }
@@ -455,8 +478,14 @@
     return nearest;
   }
 
-  const floorBase = (floor) => (floor || 0) * FLOOR_PITCH;
+  /* Screen Y grows downward: upper floors (positive floor) sit above ground. */
+  const floorBase = (floor) => -(floor || 0) * FLOOR_PITCH;
   const worldY = (floor, localY) => floorBase(floor) + localY;
+  const floorLabel = (f) => {
+    if (f > 0) return f === 1 ? "Upper floor" : "Floor " + f;
+    if (f < 0) return f === -1 ? "Basement" : "Basement " + Math.abs(f);
+    return "Ground floor";
+  };
 
   /* ---------- agents --------------------------------------------------------- */
 
@@ -964,8 +993,8 @@
         if (!a.target || !a.target.a || !isFinite(a.target.x)) {
           a.target = null;
           if (a.visits <= 0) {
-            if ((a.floor || 0) > 0) {
-              /* Go down before leaving. */
+            if ((a.floor || 0) !== 0) {
+              /* Return to ground before leaving. */
               const st = stairsOnFloor(L, a.floor);
               if (st) {
                 a.climb = { toFloor: 0, after: null, stairs: st };
@@ -973,6 +1002,7 @@
                 a.stateAge = 0;
                 continue;
               }
+              a.floor = 0;
             }
             if (maybeAmenity(rng, L, a, S, true)) continue;
             a.state = "leave"; a.stateAge = 0; continue;
@@ -1211,7 +1241,7 @@
           a.state = a.visits <= 0 ? "leave" : "walk";
         }
       } else {                                   /* leaving */
-        if ((a.floor || 0) > 0) {
+        if ((a.floor || 0) !== 0) {
           const st = stairsOnFloor(L, a.floor);
           if (st) {
             a.climb = { toFloor: 0, after: null, stairs: st };
@@ -1286,7 +1316,7 @@
 
   S7.visitors = {
     create, step, layout, getLayout, invalidate, reseat, place, roomAt, feetY, scaleOf,
-    floorBase, worldY, stairsOnFloor, localFeetY,
+    floorBase, worldY, floorLabel, stairsOnFloor, localFeetY,
     H, FLOOR_Y, FLOOR_PITCH, WALK_NEAR, WALK_FAR, ROOM_PAD, EXHIBIT_GAP, DOOR, BENCH_Y, MAX_AGENTS,
     FOYER_W, DOOR_X, DESK_X, DESK_W, STAIRS_W,
   };

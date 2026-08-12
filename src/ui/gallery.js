@@ -210,8 +210,13 @@
     return Math.max(0, Math.min(Math.max(0, total - VIEW_W), x));
   };
   const clampCamY = (y) => {
-    const totalH = layoutCache ? (layoutCache.totalH || H) : VIEW_H;
-    return Math.max(0, Math.min(Math.max(0, totalH - VIEW_H + 20), y));
+    const yMin = layoutCache ? (layoutCache.yMin !== undefined ? layoutCache.yMin : 0) : 0;
+    const yMax = layoutCache
+      ? (layoutCache.yMax !== undefined ? layoutCache.yMax : (layoutCache.totalH || H))
+      : VIEW_H;
+    const lo = yMin;
+    const hi = Math.max(lo, yMax - VIEW_H + 24);
+    return Math.max(lo, Math.min(hi, y));
   };
 
   /* Floor-local box of the room intro board (world y = floorBase + y). */
@@ -277,7 +282,7 @@
   const sx = (wx) => Math.round((wx - camX) * SCALE);
   /* World y (includes floor pitch for multi-storey). */
   const sy = (wy) => Math.round((wy - camY) * SCALE);
-  const ly = (localY) => activeFloor * FLOOR_PITCH + localY;
+  const ly = (localY) => V.floorBase(activeFloor) + localY;
   const syl = (localY) => sy(ly(localY));
   /* While painting a room, rect() treats y as floor-local. */
   let roomLocal = false;
@@ -473,7 +478,7 @@
   function drawRoom(r) {
     const x0 = r.x, x1 = r.x + r.width;
     activeFloor = r.floor || 0;
-    const base = activeFloor * FLOOR_PITCH;
+    const base = V.floorBase(activeFloor);
     /* Cull rooms outside the 2D viewport. */
     if (x1 < camX - 40 || x0 > camX + VIEW_W + 40) return;
     if (base + V.H < camY - 20 || base > camY + VIEW_H + 20) return;
@@ -1360,10 +1365,11 @@
     ctx.fillRect(0, 0, CW, CH);
 
     /* Storey bands behind everything — dark void between floors. */
-    const floors = L.floors || 1;
-    for (let f = 0; f < floors; f++) {
-      const by = f * FLOOR_PITCH;
-      ctx.fillStyle = f % 2 ? "#0c0a07" : "#0a0806";
+    const minF = L.minFloor !== undefined ? L.minFloor : 0;
+    const maxF = L.maxFloor !== undefined ? L.maxFloor : 0;
+    for (let f = maxF; f >= minF; f--) {
+      const by = V.floorBase(f);
+      ctx.fillStyle = f === 0 ? "#0a0806" : f > 0 ? "#0c0a07" : "#08060a";
       ctx.fillRect(0, sy(by), CW, Math.round(FLOOR_PITCH * SCALE));
     }
 
@@ -1446,13 +1452,19 @@
     ctx.fillStyle = gy;
     ctx.fillRect(0, 0, CW, CH);
 
-    /* Floor label in corner */
-    if (floors > 1) {
-      const fl = Math.round(camY / FLOOR_PITCH);
-      const label = fl <= 0 ? "Ground floor" : fl === 1 ? "Upper floor" : "Floor " + fl;
+    /* Floor label in corner — which storey is under the camera centre. */
+    if ((L.floors || 1) > 1) {
+      const midY = camY + VIEW_H * 0.45;
+      let fl = 0, best = 1e9;
+      for (let f = minF; f <= maxF; f++) {
+        const d = Math.abs(midY - (V.floorBase(f) + FLOOR_Y * 0.5));
+        if (d < best) { best = d; fl = f; }
+      }
+      const label = V.floorLabel ? V.floorLabel(fl) : ("Floor " + fl);
       ctx.font = "600 11px " + FONT_UI;
+      const tw = Math.ceil(ctx.measureText(label).width) + 16;
       ctx.fillStyle = "#0c0a08cc";
-      ctx.fillRect(10, CH - 28, 110, 18);
+      ctx.fillRect(10, CH - 28, tw, 18);
       ctx.fillStyle = "#c79a42";
       ctx.fillText(label, 18, CH - 15);
     }
@@ -1475,7 +1487,14 @@
 
   function currentRoom() {
     if (!layoutCache) return null;
-    const fl = Math.round(camY / FLOOR_PITCH);
+    const midY = camY + VIEW_H * 0.45;
+    const minF = layoutCache.minFloor !== undefined ? layoutCache.minFloor : 0;
+    const maxF = layoutCache.maxFloor !== undefined ? layoutCache.maxFloor : 0;
+    let fl = 0, best = 1e9;
+    for (let f = minF; f <= maxF; f++) {
+      const d = Math.abs(midY - (V.floorBase(f) + FLOOR_Y * 0.5));
+      if (d < best) { best = d; fl = f; }
+    }
     return V.roomAt(layoutCache, camX + VIEW_W / 2, fl);
   }
 
@@ -1484,7 +1503,7 @@
     if (!rs.length) return;
     const r = rs[Math.max(0, Math.min(rs.length - 1, i))];
     camTX = clampCamX(r.x + r.width / 2 - VIEW_W / 2);
-    camTY = clampCamY(V.floorBase(r.floor || 0) + 10);
+    camTY = clampCamY(V.floorBase(r.floor || 0) + 8);
   }
 
   function goToFloor(f) {

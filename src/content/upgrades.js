@@ -140,8 +140,8 @@
       eff: (S) => { S.mul.understanding *= 1.15; S.mul.rating *= 1.06; } },
 
     { id: "deepgal", name: "The deep gallery", base: 6500, mul: 1.50, max: 4,
-      desc: () => "Low-light hall for the strangest finds. +12 space, +10% rating.",
-      flavour: "Thick glass. Soft voice. A queue that goes round the landing.",
+      desc: () => "Opens a basement hall for the strangest finds. +12 space, +10% rating.",
+      flavour: "Thick glass. Soft voice. A queue that goes down the stairs.",
       unlock: (S) => S.stats.deepFinds >= 1,
       eff: (S) => { S.bonus.capacity += 12; S.mul.rating *= 1.10; S.mul.visitors *= 1.06; } },
   ];

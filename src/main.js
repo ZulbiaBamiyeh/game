@@ -392,29 +392,32 @@
     $("gal-room").textContent = here ? here.era.name : "—";
     $("gal-period").textContent = here && here.era.period ? here.era.period : "";
 
-    /* Floor switcher */
+    /* Floor switcher: upper (top of list) → ground → basement */
     const floorsEl = $("gal-floors");
     if (floorsEl) {
-      const maxF = rooms.reduce((m, r) => Math.max(m, r.floor || 0), 0);
-      const sigF = String(maxF);
+      const floorSet = new Set(rooms.map((r) => r.floor || 0));
+      const floorList = [...floorSet].sort((a, b) => b - a); /* upper first */
+      const sigF = floorList.join(",");
       if (floorsEl.dataset.sig !== sigF) {
         floorsEl.dataset.sig = sigF;
         floorsEl.innerHTML = "";
-        if (maxF > 0) {
-          for (let f = maxF; f >= 0; f--) {
+        if (floorList.length > 1) {
+          for (const f of floorList) {
             const b = document.createElement("button");
             b.type = "button";
             b.className = "galfloor";
-            b.textContent = f === 0 ? "Ground" : f === 1 ? "Upper" : "Floor " + f;
+            b.dataset.floor = String(f);
+            b.textContent = S7.visitors.floorLabel
+              ? S7.visitors.floorLabel(f).replace(/ floor$/i, "")
+              : (f > 0 ? "Upper" : f < 0 ? "Basement" : "Ground");
             b.addEventListener("click", () => S7.galleryView.goToFloor(f));
             floorsEl.appendChild(b);
           }
         }
       }
       const hereF = here ? (here.floor || 0) : 0;
-      floorsEl.querySelectorAll(".galfloor").forEach((b, i, arr) => {
-        const f = maxF - i;
-        b.classList.toggle("on", f === hereF);
+      floorsEl.querySelectorAll(".galfloor").forEach((b) => {
+        b.classList.toggle("on", parseInt(b.dataset.floor, 10) === hereF);
       });
     }
 
@@ -435,12 +438,13 @@
           (r.foyer ? " foyer" : "") +
           (r.shop || r.cafe ? " amenity" : "") +
           (r.stairs ? " stairs" : "");
+        const fl = r.floor || 0;
+        const flMark = fl > 0 ? "↑" : fl < 0 ? "↓" : "·";
         chip.innerHTML = "<b>" + V.esc(label) + "</b>" +
           (n ? "<span>" + n + "</span>" :
-            r.foyer || r.amenity || r.stairs ? "<span>" +
-              (r.floor ? "↑" : "·") + "</span>" : "<span>—</span>");
+            r.foyer || r.amenity || r.stairs ? "<span>" + flMark + "</span>" : "<span>—</span>");
         chip.title = r.era.name + (r.era.period ? " · " + r.era.period : "") +
-          (r.floor ? " · upper floor" : "");
+          (fl !== 0 && S7.visitors.floorLabel ? " · " + S7.visitors.floorLabel(fl) : "");
         chip.addEventListener("click", () => S7.galleryView.goToRoom(i));
         map.appendChild(chip);
       });

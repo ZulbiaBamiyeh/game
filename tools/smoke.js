@@ -186,9 +186,20 @@ function serve() {
     if (!L.rooms.some((r) => r.cafe)) return "no café room";
     if (!L.rooms.some((r) => r.stairs)) return "no stairs";
     if ((L.floors || 1) < 2) return "no upper floor";
+    /* Upper must sit above ground in world Y (negative base). */
+    if (!(S7.visitors.floorBase(1) < S7.visitors.floorBase(0)))
+      return "upper not above ground";
+    S.up.deepgal = 1;
+    S7.visitors.invalidate();
+    const L2 = S7.visitors.getLayout(S);
+    if (!L2.rooms.some((r) => r.deepgal && r.floor === -1))
+      return "deep gallery not in basement";
+    if (!(S7.visitors.floorBase(-1) > S7.visitors.floorBase(0)))
+      return "basement not below ground";
     if (typeof S7.galleryView.goToFloor !== "function") return "no goToFloor";
     S7.galleryView.goToFloor(1);
     S7.galleryView.goToFloor(0);
+    S7.galleryView.goToFloor(-1);
     return "ok";
   });
 
