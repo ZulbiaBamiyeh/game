@@ -64,13 +64,59 @@
     }, extra || {});
   }
 
+  function pushGalleryRoom(rooms, xRef, meta, items, wingLvl) {
+    items.sort((a, b) => (a.slot === undefined ? a.depth : a.slot) -
+                         (b.slot === undefined ? b.depth : b.slot));
+    const x = xRef.x;
+    const exhibits = [];
+    let cx = x + ROOM_PAD;
+    for (let i = 0; i < items.length; i++) {
+      const a = items[i];
+      const phys = S7.artifacts.physical(a);
+      let mount = a.kind === "painting" ? "wall" : a.kind === "sculpture" ? "plinth" : "case";
+      /* Minerals and many fossils sit better in cases; dino bones on plinths. */
+      if (meta.theme === "mineral") mount = a.kind === "sculpture" ? "plinth" : "case";
+      if (meta.theme === "dino" && a.kind === "object" &&
+          (a.objectType === "dinoBone" || a.objectType === "trackSlab" || a.objectType === "eggFossil"))
+        mount = "plinth";
+      exhibits.push({ a, x: cx + phys.w / 2, w: phys.w, h: phys.h, mount, index: i, phys });
+      cx += phys.w;
+    }
+    const wingPad = wingLvl > 0 ? 12 + Math.min(8, wingLvl) * 6 : 0;
+    /* Themed halls get more breathing room so a full Egypt or dinosaur room
+       feels like a destination, not a corridor. */
+    const themePad = meta.theme ? 40 : 0;
+    const width = Math.max(MIN_ROOM + wingPad + themePad, cx - x + ROOM_PAD + wingPad + themePad);
+    const benches = [];
+    const nBench = Math.max(1, Math.floor(width / 280));
+    for (let b = 0; b < nBench; b++) {
+      const bx = x + width * ((b + 0.5) / nBench) + (b % 2 ? 18 : -18);
+      benches.push({
+        x: bx, y: BENCH_Y,
+        seats: [bx - 13, bx, bx + 13].map((sxx) => ({ x: sxx, taken: null })),
+      });
+    }
+    const era = {
+      id: meta.id,
+      name: meta.name,
+      period: meta.period,
+      short: meta.short || meta.name,
+    };
+    rooms.push({
+      era, x, width, exhibits, items, benches,
+      theme: meta.theme || null,
+      featured: !!meta.theme,
+    });
+    xRef.x = x + width + DOOR;
+  }
+
   function layout(S) {
     const shown = S.collection.filter((a) => a.display !== false);
-    const byEra = new Map();
+    const byRoom = new Map();
     for (const a of shown) {
-      const id = a.room || S7.cultures.eraAt(a.depth).id;
-      if (!byEra.has(id)) byEra.set(id, []);
-      byEra.get(id).push(a);
+      const id = S7.cultures.galleryIdFor(a);
+      if (!byRoom.has(id)) byRoom.set(id, []);
+      byRoom.get(id).push(a);
     }
 
     const up = S.up || {};
@@ -79,13 +125,10 @@
     const wingLvl = up.wing || 0;
     const deepLvl = up.deepgal || 0;
 
-    /* Gift shop claims a bay of the entrance hall, so the foyer stretches. */
     const foyerW = FOYER_W + (shopLvl > 0 ? 70 + Math.min(4, shopLvl) * 8 : 0);
-
     const rooms = [];
-    /* Room zero is always the entrance hall. It has no exhibits; it has a desk. */
     rooms.push({
-      era: { id: "foyer", name: "Entrance hall", period: "admissions and cloakroom" },
+      era: { id: "foyer", name: "Entrance hall", period: "admissions and cloakroom", short: "Entrance" },
       x: 0, width: foyerW, exhibits: [], items: [], benches: [
         { x: foyerW - 40, y: BENCH_Y,
           seats: [foyerW - 53, foyerW - 40, foyerW - 27].map((sxx) => ({ x: sxx, taken: null })) },
@@ -94,67 +137,60 @@
       shop: shopLvl,
     });
 
-    let x = foyerW + DOOR;
+    const xRef = { x: foyerW + DOOR };
 
     if (cafeLvl > 0) {
       const cw = 160 + Math.min(6, cafeLvl) * 10;
-      rooms.push(amenityRoom("cafe", "Café", "tea and cake", cw, x, { cafe: cafeLvl }));
-      x += cw + DOOR;
+      rooms.push(amenityRoom("cafe", "Café", "tea and cake", cw, xRef.x, { cafe: cafeLvl }));
+      xRef.x += cw + DOOR;
     }
 
+    /* Themed halls first among the collection rooms (Egypt, dinosaurs, …)
+       so the building reads as a real museum plan, not only a depth sort. */
+    const placed = new Set();
+    for (const g of S7.cultures.GALLERIES) {
+      const items = byRoom.get(g.id);
+      if (!items || !items.length) continue;
+      pushGalleryRoom(rooms, xRef, g, items, wingLvl);
+      placed.add(g.id);
+    }
+
+    /* Remaining finds by depth band, in order. */
     for (const era of S7.cultures.ERAS) {
-      const items = byEra.get(era.id);
-      if (!items) continue;
-      items.sort((a, b) => (a.slot === undefined ? a.depth : a.slot) -
-                           (b.slot === undefined ? b.depth : b.slot));
-
-      const exhibits = [];
-      let cx = x + ROOM_PAD;
-      for (let i = 0; i < items.length; i++) {
-        const a = items[i];
-        const phys = S7.artifacts.physical(a);
-        const mount = a.kind === "painting" ? "wall" : a.kind === "sculpture" ? "plinth" : "case";
-        exhibits.push({ a, x: cx + phys.w / 2, w: phys.w, h: phys.h, mount, index: i, phys });
-        cx += phys.w;
-      }
-      /* Wings buy floor area: each level lets galleries breathe a little. */
-      const wingPad = wingLvl > 0 ? 12 + Math.min(8, wingLvl) * 6 : 0;
-      const width = Math.max(MIN_ROOM + wingPad, cx - x + ROOM_PAD + wingPad);
-
-      /* One bench per stretch of room, dropped in the widest gap between
-         exhibits so nobody has to sit inside a display case. */
-      const benches = [];
-      const nBench = Math.max(1, Math.floor(width / 300));
-      for (let b = 0; b < nBench; b++) {
-        const bx = x + width * ((b + 0.5) / nBench) + (b % 2 ? 18 : -18);
-        benches.push({
-          x: bx, y: BENCH_Y,
-          seats: [bx - 13, bx, bx + 13].map((sxx) => ({ x: sxx, taken: null })),
-        });
-      }
-
-      rooms.push({ era, x, width, exhibits, items, benches });
-      x += width + DOOR;
+      if (placed.has(era.id)) continue;
+      const items = byRoom.get(era.id);
+      if (!items || !items.length) continue;
+      /* Skip era buckets that only exist because everything was rehomed to a theme. */
+      pushGalleryRoom(rooms, xRef, {
+        id: era.id, name: era.name, period: era.period, short: era.name,
+      }, items, wingLvl);
+      placed.add(era.id);
     }
 
-    /* New wings open as empty rooms at the end of the run, so the strip
-       lengthens when the trustees are persuaded. */
+    /* Any custom rehang rooms not already placed. */
+    for (const [id, items] of byRoom) {
+      if (placed.has(id) || id === "foyer" || id === "cafe") continue;
+      if (String(id).indexOf("wing") === 0 || id === "deepgal") continue;
+      pushGalleryRoom(rooms, xRef, {
+        id, name: id, period: "rehung", short: id,
+      }, items, wingLvl);
+    }
+
     for (let w = 0; w < Math.min(4, wingLvl); w++) {
       const ww = 180 + w * 20;
       rooms.push(amenityRoom(
         "wing" + w,
         w === 0 ? "East wing" : w === 1 ? "West wing" : "New wing " + (w + 1),
         "recently opened",
-        ww, x, { wing: true, wingIndex: w }));
-      x += ww + DOOR;
+        ww, xRef.x, { wing: true, wingIndex: w }));
+      xRef.x += ww + DOOR;
     }
 
     if (deepLvl > 0) {
       const dw = 200 + Math.min(6, deepLvl) * 12;
       rooms.push(amenityRoom(
         "deepgal", "The deep gallery", "low light · thick glass",
-        dw, x, { deepgal: deepLvl }));
-      x += dw + DOOR;
+        dw, xRef.x, { deepgal: deepLvl }));
     }
 
     if (!rooms.length) {
@@ -176,7 +212,7 @@
   function place(S, artifact, roomId, beforeIndex) {
     artifact.room = roomId;
     const peers = S.collection.filter(
-      (a) => a !== artifact && a.display !== false && (a.room || S7.cultures.eraAt(a.depth).id) === roomId);
+      (a) => a !== artifact && a.display !== false && S7.cultures.galleryIdFor(a) === roomId);
     peers.sort((a, b) => (a.slot === undefined ? a.depth : a.slot) -
                          (b.slot === undefined ? b.depth : b.slot));
     peers.splice(Math.max(0, Math.min(peers.length, beforeIndex)), 0, artifact);

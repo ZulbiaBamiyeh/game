@@ -662,6 +662,306 @@
       R.crust(B, "verdi", 0.66, rng.int(1, 999));
       outline(B, "iron", 0);
     },
+
+    /* ---------- Egypt ------------------------------------------------------- */
+
+    scarab(B, rng) {
+      const mat = rng.pick(["stone", "gold", "celadon", "obsid"]);
+      ellipseFill(B, 32, 34, 18, 14, (x, y, dx, dy, d) => {
+        if (d > 0.98) return null;
+        return tone(mat, clamp(0.30 + domeLight(dx, dy, 18) * 0.55 + (dy < -0.2 ? 0.1 : 0), 0, 1));
+      });
+      ellipseFill(B, 32, 22, 10, 8, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.36 + domeLight(dx, dy, 10) * 0.5, 0, 1)));
+      for (const s of [-1, 1]) {
+        lineTo(B, 20, 30, 14 + s, 40, 1, () => tone(mat, 0.22));
+        lineTo(B, 44, 30, 50 - s, 40, 1, () => tone(mat, 0.22));
+      }
+      for (let i = 0; i < 5; i++)
+        lineTo(B, 22, 28 + i * 2, 42, 28 + i * 2, 0, () => tone(mat, 0.12));
+      outline(B, mat, 0);
+    },
+
+    canopic(B, rng) {
+      const mat = rng.pick(["stone", "sand", "clay", "celadon"]);
+      rectFill(B, 22, 22, 42, 56, (x, y) =>
+        tone(mat, clamp(0.28 + Math.sin((x - 22) / 20 * Math.PI) * 0.4 + fbm(x * 0.3, y * 0.2, 4) * 0.12, 0, 1)));
+      ellipseFill(B, 32, 20, 12, 10, (x, y, dx, dy, d) =>
+        d > 0.96 ? null : tone(mat, clamp(0.34 + domeLight(dx, dy, 12) * 0.48, 0, 1)));
+      /* jackal / human head suggestion */
+      ellipseFill(B, 32, 14, 8, 7, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.38 + domeLight(dx, dy, 8) * 0.4, 0, 1)));
+      for (const s of [-1, 1]) put(B, 32 + s * 3, 13, tone("charcoal", 0.2));
+      for (let i = 0; i < 4; i++)
+        lineTo(B, 24, 28 + i * 5, 40, 28 + i * 5, 0, () => tone(mat, 0.14));
+      outline(B, mat, 0);
+    },
+
+    ankh(B, rng) {
+      const mat = rng.pick(["gold", "bronze", "stone"]);
+      ellipseFill(B, 32, 16, 9, 10, (x, y, dx, dy, d) =>
+        (d < 0.55 || d > 0.98) ? null : tone(mat, clamp(0.40 + domeLight(dx, dy, 9) * 0.45, 0, 1)));
+      rectFill(B, 29, 24, 35, 54, (x, y) =>
+        tone(mat, clamp(0.34 + Math.sin((x - 29) / 6 * Math.PI) * 0.4, 0, 1)));
+      rectFill(B, 18, 30, 46, 35, (x, y) =>
+        tone(mat, clamp(0.36 + fbm(x * 0.4, y * 0.4, 3) * 0.2, 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    ushabti(B, rng) {
+      const mat = rng.pick(["celadon", "sand", "stone", "clay"]);
+      rectFill(B, 24, 12, 40, 56, (x, y) =>
+        tone(mat, clamp(0.30 + Math.sin((x - 24) / 16 * Math.PI) * 0.38 + fbm(x * 0.3, y * 0.25, 5) * 0.12, 0, 1)));
+      ellipseFill(B, 32, 14, 9, 8, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.36 + domeLight(dx, dy, 9) * 0.42, 0, 1)));
+      for (const s of [-1, 1]) put(B, 32 + s * 3, 13, tone("charcoal", 0.18));
+      lineTo(B, 28, 18, 36, 18, 0, () => tone(mat, 0.14));
+      /* crossed arms */
+      lineTo(B, 24, 28, 40, 34, 1, () => tone(mat, 0.22));
+      lineTo(B, 40, 28, 24, 34, 1, () => tone(mat, 0.22));
+      for (let i = 0; i < 6; i++)
+        lineTo(B, 26, 38 + i * 2.5, 38, 38 + i * 2.5, 0, () => tone(mat, 0.12));
+      outline(B, mat, 0);
+    },
+
+    pectoral(B, rng) {
+      const mat = rng.pick(["gold", "lapis", "stone"]);
+      polyFill(B, [[32, 12], [52, 28], [44, 48], [20, 48], [12, 28]], (x, y) =>
+        tone(mat, clamp(0.34 + fbm(x * 0.25, y * 0.25, 6) * 0.28 + (y < 22 ? 0.12 : 0), 0, 1)));
+      ellipseFill(B, 32, 30, 8, 7, (x, y, dx, dy, d) =>
+        d > 0.9 ? null : tone(rng.pick(["lapis", "cinnab", "malach"]), 0.55));
+      outline(B, mat, 0);
+    },
+
+    /* ---------- dinosaurs & fossils ---------------------------------------- */
+
+    dinoTooth(B, rng) {
+      const mat = rng.pick(["bone", "stone", "chalk"]);
+      polyFill(B, [[32, 8], [42, 40], [32, 56], [22, 40]], (x, y) =>
+        tone(mat, clamp(0.42 + (32 - Math.abs(x - 32)) * 0.02 + fbm(x * 0.3, y * 0.2, 4) * 0.16, 0, 1)));
+      lineTo(B, 28, 20, 36, 20, 0, () => tone(mat, 0.18));
+      lineTo(B, 27, 30, 37, 30, 0, () => tone(mat, 0.14));
+      outline(B, mat, 0);
+    },
+
+    dinoBone(B, rng) {
+      const mat = rng.pick(["bone", "stone"]);
+      /* long bone with knuckled ends */
+      rectFill(B, 28, 14, 36, 50, (x, y) =>
+        tone(mat, clamp(0.40 + Math.sin((x - 28) / 8 * Math.PI) * 0.3 + fbm(x * 0.4, y * 0.2, 3) * 0.14, 0, 1)));
+      ellipseFill(B, 32, 12, 12, 8, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.44 + domeLight(dx, dy, 12) * 0.36, 0, 1)));
+      ellipseFill(B, 32, 52, 14, 9, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.40 + domeLight(dx, dy, 14) * 0.36, 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    dinoClaw(B, rng) {
+      const mat = rng.pick(["bone", "stone", "obsid"]);
+      polyFill(B, [[18, 20], [40, 12], [48, 28], [36, 50], [20, 44]], (x, y) =>
+        tone(mat, clamp(0.36 + fbm(x * 0.3, y * 0.25, 5) * 0.22 + (x > 36 ? 0.1 : 0), 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    eggFossil(B, rng) {
+      const mat = rng.pick(["stone", "chalk", "sand"]);
+      ellipseFill(B, 32, 34, 16, 20, (x, y, dx, dy, d) => {
+        if (d > 0.98) return null;
+        let t = 0.34 + domeLight(dx, dy, 16) * 0.4 + fbm(x * 0.2, y * 0.2, 7) * 0.18;
+        if (fbm(x * 0.5, y * 0.5, 11) > 0.72) t -= 0.2;
+        return tone(mat, clamp(t, 0, 1));
+      });
+      outline(B, mat, 0);
+    },
+
+    trackSlab(B, rng) {
+      const mat = rng.pick(["stone", "sand", "chalk"]);
+      rectFill(B, 10, 12, 54, 52, (x, y) =>
+        tone(mat, clamp(0.28 + fbm(x * 0.15, y * 0.15, 2) * 0.22, 0, 1)));
+      for (let i = 0; i < 3; i++) {
+        const px = 18 + i * 12, py = 22 + (i % 2) * 10;
+        ellipseFill(B, px, py, 6, 5, (x, y, dx, dy, d) =>
+          d > 0.9 ? null : tone(mat, clamp(0.12 + d * 0.2, 0, 1)));
+        for (let t = 0; t < 3; t++) {
+          const a = -0.8 + t * 0.8;
+          lineTo(B, px, py + 2, px + Math.cos(a) * 8, py + 6 + Math.sin(a) * 4, 1, () => tone(mat, 0.10));
+        }
+      }
+      outline(B, mat, 0);
+    },
+
+    ammonite(B, rng) {
+      const mat = rng.pick(["stone", "chalk", "gold"]);
+      ellipseFill(B, 32, 32, 22, 22, (x, y, dx, dy, d) => {
+        if (d > 0.98) return null;
+        const ang = Math.atan2(dy, dx);
+        const spiral = ((ang + Math.PI) / 6.283 + d * 2.2) % 1;
+        let t = 0.30 + domeLight(dx, dy, 22) * 0.35 + (spiral > 0.5 ? 0.12 : -0.06);
+        return tone(mat, clamp(t + fbm(x * 0.25, y * 0.25, 4) * 0.1, 0, 1));
+      });
+      for (let i = 0; i < 10; i++) {
+        const a0 = i * 0.55, r0 = 4 + i * 1.6, r1 = r0 + 2;
+        lineTo(B, 32 + Math.cos(a0) * r0, 32 + Math.sin(a0) * r0,
+               32 + Math.cos(a0 + 0.6) * r1, 32 + Math.sin(a0 + 0.6) * r1, 0, () => tone(mat, 0.14));
+      }
+      outline(B, mat, 0);
+    },
+
+    trilobite(B, rng) {
+      const mat = rng.pick(["stone", "chalk"]);
+      ellipseFill(B, 32, 32, 12, 20, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.34 + domeLight(dx, dy, 14) * 0.4, 0, 1)));
+      for (let i = 0; i < 8; i++)
+        lineTo(B, 22, 18 + i * 3.5, 42, 18 + i * 3.5, 0, () => tone(mat, 0.14));
+      lineTo(B, 32, 12, 32, 52, 0, () => tone(mat, 0.12));
+      ellipseFill(B, 32, 16, 10, 7, (x, y, dx, dy, d) =>
+        d > 0.92 ? null : tone(mat, clamp(0.38 + domeLight(dx, dy, 10) * 0.35, 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    fernFossil(B, rng) {
+      const mat = rng.pick(["stone", "chalk", "sand"]);
+      rectFill(B, 8, 10, 56, 54, (x, y) =>
+        tone(mat, clamp(0.26 + fbm(x * 0.12, y * 0.12, 2) * 0.18, 0, 1)));
+      lineTo(B, 32, 14, 32, 50, 1, () => tone("charcoal", 0.35));
+      for (let i = 0; i < 9; i++) {
+        const y = 16 + i * 3.5, s = (i % 2 ? 1 : -1), len = 10 + (i % 3) * 3;
+        lineTo(B, 32, y, 32 + s * len, y - 2, 0, () => tone("charcoal", 0.28));
+        for (let j = 0; j < 4; j++)
+          lineTo(B, 32 + s * (j + 1) * 2.2, y - j * 0.3,
+                 32 + s * (j + 1) * 2.2, y - 3 - j, 0, () => tone("charcoal", 0.22));
+      }
+      outline(B, mat, 0);
+    },
+
+    crinoid(B, rng) {
+      const mat = rng.pick(["stone", "chalk"]);
+      rectFill(B, 30, 20, 34, 52, (x, y) => tone(mat, clamp(0.36 + fbm(x * 0.4, y * 0.3, 3) * 0.2, 0, 1)));
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + i * Math.PI / 3;
+        lineTo(B, 32, 22, 32 + Math.cos(a) * 16, 22 + Math.sin(a) * 12, 1, () => tone(mat, 0.30));
+      }
+      ellipseFill(B, 32, 20, 5, 4, () => tone(mat, 0.48));
+      outline(B, mat, 0);
+    },
+
+    fishFossil(B, rng) {
+      const mat = rng.pick(["stone", "chalk"]);
+      rectFill(B, 8, 14, 56, 50, (x, y) =>
+        tone(mat, clamp(0.26 + fbm(x * 0.14, y * 0.14, 2) * 0.16, 0, 1)));
+      ellipseFill(B, 30, 32, 18, 9, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone("charcoal", clamp(0.22 + domeLight(dx, dy, 18) * 0.2, 0, 1)));
+      polyFill(B, [[46, 32], [56, 26], [56, 38]], () => tone("charcoal", 0.20));
+      ellipseFill(B, 18, 30, 3, 2.5, () => tone("charcoal", 0.12));
+      for (let i = 0; i < 6; i++)
+        lineTo(B, 22 + i * 4, 28, 22 + i * 4, 36, 0, () => tone("charcoal", 0.14));
+      outline(B, mat, 0);
+    },
+
+    coralFossil(B, rng) {
+      const mat = rng.pick(["stone", "chalk", "sand"]);
+      for (let i = 0; i < 7; i++) {
+        const px = 16 + (i % 4) * 10, py = 18 + Math.floor(i / 4) * 18;
+        ellipseFill(B, px, py, 7, 9, (x, y, dx, dy, d) => {
+          if (d > 0.95) return null;
+          const cell = (Math.sin(dx * 8) * Math.sin(dy * 8));
+          return tone(mat, clamp(0.30 + cell * 0.15 + domeLight(dx, dy, 7) * 0.3, 0, 1));
+        });
+      }
+      outline(B, mat, 0);
+    },
+
+    /* ---------- minerals ---------------------------------------------------- */
+
+    geode(B, rng) {
+      const shell = rng.pick(["stone", "basalt", "chalk"]);
+      const gem = rng.pick(["lapis", "malach", "cinnab", "gold"]);
+      /* outer rock half */
+      ellipseFill(B, 28, 34, 18, 16, (x, y, dx, dy, d) => {
+        if (d > 0.98 || dx > 0.15) return null;
+        return tone(shell, clamp(0.28 + domeLight(dx, dy, 18) * 0.4 + fbm(x * 0.3, y * 0.3, 4) * 0.16, 0, 1));
+      });
+      /* crystal cavity */
+      ellipseFill(B, 36, 34, 14, 13, (x, y, dx, dy, d) => {
+        if (d > 0.95 || dx < -0.2) return null;
+        return tone(gem, clamp(0.40 + domeLight(dx, dy, 14) * 0.45 + fbm(x * 0.5, y * 0.5, 9) * 0.2, 0, 1));
+      });
+      for (let i = 0; i < 8; i++) {
+        const a = -0.6 + i * 0.25;
+        polyFill(B, [
+          [36, 34],
+          [36 + Math.cos(a) * 12, 34 + Math.sin(a) * 11],
+          [36 + Math.cos(a + 0.2) * 10, 34 + Math.sin(a + 0.2) * 9],
+        ], () => tone(gem, 0.55 + (i % 3) * 0.08));
+      }
+      outline(B, shell, 0);
+    },
+
+    crystal(B, rng) {
+      const mat = rng.pick(["lapis", "malach", "gold", "obsid", "cinnab"]);
+      for (let i = 0; i < 5; i++) {
+        const x0 = 18 + i * 7, h = 18 + (i % 3) * 10, tip = 12 + (i % 2) * 4;
+        polyFill(B, [[x0, 52], [x0 + 6, 52], [x0 + 3, tip]], (x, y) =>
+          tone(mat, clamp(0.35 + (52 - y) / h * 0.3 + fbm(x * 0.4, y * 0.3, 3) * 0.14, 0, 1)));
+      }
+      outline(B, mat, 0);
+    },
+
+    goldNugget(B, rng) {
+      ellipseFill(B, 32, 34, 16, 13, (x, y, dx, dy, d) => {
+        if (d > 0.98) return null;
+        const lump = fbm(x * 0.35, y * 0.35, 6);
+        if (lump > 0.78 && d > 0.5) return null;
+        return tone("gold", clamp(0.40 + domeLight(dx, dy, 16) * 0.5 + lump * 0.16, 0, 1));
+      });
+      outline(B, "gold", 0);
+    },
+
+    meteorite(B, rng) {
+      const mat = rng.pick(["iron", "stone", "obsid"]);
+      ellipseFill(B, 32, 32, 18, 16, (x, y, dx, dy, d) => {
+        if (d > 0.98) return null;
+        let t = 0.22 + domeLight(dx, dy, 18) * 0.4 + fbm(x * 0.4, y * 0.4, 5) * 0.2;
+        if (hsh(x, y, 9) > 0.92) t += 0.25;
+        return tone(mat, clamp(t, 0, 1));
+      });
+      for (let i = 0; i < 12; i++)
+        shift(B, rng.int(18, 46), rng.int(18, 46), mat, -3);
+      outline(B, mat, 0);
+    },
+
+    opal(B, rng) {
+      ellipseFill(B, 32, 34, 14, 11, (x, y, dx, dy, d) => {
+        if (d > 0.97) return null;
+        const flash = fbm(x * 0.5, y * 0.5, 12);
+        const ramp = flash > 0.6 ? "lapis" : flash > 0.4 ? "malach" : "cinnab";
+        return tone(ramp, clamp(0.45 + domeLight(dx, dy, 14) * 0.4, 0, 1));
+      });
+      outline(B, "stone", 0);
+    },
+
+    pyrite(B, rng) {
+      /* cubic crystal habit */
+      for (let i = 0; i < 4; i++) {
+        const ox = 14 + (i % 2) * 16, oy = 16 + Math.floor(i / 2) * 16;
+        rectFill(B, ox, oy, ox + 18, oy + 16, (x, y) =>
+          tone("gold", clamp(0.38 + ((x + y) % 5 === 0 ? 0.2 : 0) + (y === oy ? 0.15 : 0), 0, 1)));
+        lineTo(B, ox, oy, ox + 18, oy, 0, () => tone("gold", 0.7));
+      }
+      outline(B, "gold", 0);
+    },
+
+    fluorite(B, rng) {
+      const mat = rng.pick(["lapis", "malach", "cinnab"]);
+      for (let i = 0; i < 3; i++) {
+        const cx = 22 + i * 10, cy = 28 + (i % 2) * 6;
+        ellipseFill(B, cx, cy, 10, 12, (x, y, dx, dy, d) => {
+          if (d > 0.9) return null;
+          return tone(mat, clamp(0.34 + domeLight(dx, dy, 10) * 0.45 + (Math.abs(dx) + Math.abs(dy) < 0.3 ? 0.15 : 0), 0, 1));
+        });
+      }
+      outline(B, mat, 0);
+    },
   };
 
   function make(rng, spec) {

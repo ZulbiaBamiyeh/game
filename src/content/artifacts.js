@@ -66,6 +66,33 @@
     marker: ["Survey marker", "Datum plate", "Benchmark plate"],
     bell: ["Small bell", "Cast bell", "Hand bell"],
     astrolabe: ["Astrolabe", "Engraved instrument", "Brass astrolabe"],
+    /* Egypt */
+    scarab: ["Scarab seal", "Carved scarab", "Heart scarab"],
+    canopic: ["Canopic jar", "Organ jar", "Canopic vessel"],
+    ankh: ["Ankh amulet", "Symbol of life", "Gold ankh"],
+    ushabti: ["Ushabti figure", "Servant figure", "Faience ushabti"],
+    pectoral: ["Broad collar", "Pectoral ornament", "Beaded pectoral"],
+    /* Dinosaurs */
+    dinoTooth: ["Dinosaur tooth", "Serrated predator tooth", "Fossil tooth"],
+    dinoBone: ["Dinosaur limb bone", "Fossil long bone", "Hollow limb bone"],
+    dinoClaw: ["Dinosaur claw", "Raptorial claw", "Fossil claw"],
+    eggFossil: ["Dinosaur egg", "Fossil egg clutch piece", "Mineralised egg"],
+    trackSlab: ["Footprint slab", "Trackway block", "Three-toed print"],
+    /* Fossils */
+    ammonite: ["Ammonite", "Spiral ammonite", "Pyritised ammonite"],
+    trilobite: ["Trilobite", "Complete trilobite", "Enrolled trilobite"],
+    fernFossil: ["Fern fossil", "Carbonised fern", "Leaf impression"],
+    crinoid: ["Crinoid stem", "Sea lily fossil", "Crinoid calyx"],
+    fishFossil: ["Fossil fish", "Fish on slab", "Complete fish fossil"],
+    coralFossil: ["Fossil coral", "Colonial coral", "Rugose coral"],
+    /* Minerals */
+    geode: ["Crystal geode", "Amethyst geode half", "Lined geode"],
+    crystal: ["Crystal cluster", "Mineral crystal", "Terminated crystal"],
+    goldNugget: ["Gold nugget", "Native gold", "River gold"],
+    meteorite: ["Meteorite", "Iron meteorite", "Stony meteorite"],
+    opal: ["Opal", "Precious opal", "Play-of-colour opal"],
+    pyrite: ["Pyrite cube", "Fool's gold", "Cubic pyrite"],
+    fluorite: ["Fluorite", "Fluorite octahedra", "Banded fluorite"],
   };
 
   /* Fallback so a missing entry never breaks a run. */
@@ -109,6 +136,25 @@
       "The proportions are careful and regular. Someone was following a rule.",
       "The detail is clean and even — workshop work, not a one-off.",
       "The base was left unfinished. It was meant to sit in a socket.",
+    ],
+  };
+
+  const NOTE_GALLERY = {
+    egypt: [
+      "The work is pure Nile — somebody wanted this tradition complete.",
+      "Packed with care, the way a tomb kit is packed.",
+    ],
+    dinosaurs: [
+      "Bone mineralised through. It has no business sitting in a human deposit.",
+      "A showpiece. Whoever placed it knew what a museum would do with it.",
+    ],
+    fossils: [
+      "A slab that would stop a gallery queue. Deep time, carefully boxed.",
+      "The matrix is wrong for this depth. The specimen is not.",
+    ],
+    minerals: [
+      "Still sharp in the crystal faces. It was never rolled in a river.",
+      "A cabinet specimen, not a chance pebble.",
     ],
   };
 
@@ -247,8 +293,9 @@
   function pickCulture(rng, depth) {
     const era = C.eraAt(depth);
     const ids = era.cultures;
-    /* Bias toward the first culture listed, so each band has a dominant one. */
-    const idx = Math.min(ids.length - 1, Math.floor(Math.pow(rng.f(), 1.5) * ids.length));
+    /* Mild bias toward the first listed culture, but enough flat randomness
+       that a dig through the same band does not feel like a fixed checklist. */
+    const idx = Math.min(ids.length - 1, Math.floor(Math.pow(rng.f(), 1.15) * ids.length));
     return C.byId[ids[idx]];
   }
 
@@ -256,6 +303,11 @@
     const opts = [{ k: "object", w: 58 }];
     if (culture.painting) opts.push({ k: "painting", w: 22 });
     if (culture.sculpture) opts.push({ k: "sculpture", w: 20 });
+    /* Minerals and fossils are mostly specimens, not pictures. */
+    if (culture.gallery === "minerals" || culture.gallery === "fossils")
+      return rng.weighted([{ k: "object", w: 78 }, { k: "sculpture", w: culture.sculpture ? 22 : 0 }], (o) => o.w).k;
+    if (culture.gallery === "dinosaurs")
+      return rng.weighted([{ k: "object", w: 62 }, { k: "sculpture", w: culture.sculpture ? 38 : 0 }], (o) => o.w).k;
     return rng.weighted(opts, (o) => o.w).k;
   }
 
@@ -283,22 +335,32 @@
       bonefrag: ["bone"], bottle: ["glass"], nail: ["rust"], console: ["plastic"],
       ledger: ["leather"], watch: ["steel"], marker: ["brass"], figurine: ["clay", "stone", "bone", "sand"],
       bell: ["bronze", "brass"], astrolabe: ["brass", "bronze"],
+      scarab: ["stone", "gold", "celadon", "obsid"], canopic: ["stone", "sand", "clay", "celadon"],
+      ankh: ["gold", "bronze", "stone"], ushabti: ["celadon", "sand", "stone", "clay"],
+      pectoral: ["gold", "stone", "glass"],
+      dinoTooth: ["bone", "stone", "chalk"], dinoBone: ["bone", "stone"], dinoClaw: ["bone", "stone", "obsid"],
+      eggFossil: ["stone", "chalk", "sand"], trackSlab: ["stone", "sand", "chalk"],
+      ammonite: ["stone", "chalk", "gold"], trilobite: ["stone", "chalk"], fernFossil: ["stone", "chalk", "sand"],
+      crinoid: ["stone", "chalk"], fishFossil: ["stone", "chalk"], coralFossil: ["stone", "chalk", "sand"],
+      geode: ["stone", "basalt", "chalk"], crystal: ["obsid", "gold", "stone"], goldNugget: ["gold"],
+      meteorite: ["iron", "stone", "obsid"], opal: ["stone"], pyrite: ["gold"], fluorite: ["stone", "obsid"],
     }[objectType];
     return guess ? rng.pick(guess) : "stone";
   }
 
   function buildNotes(rng, a, culture) {
     const lines = [];
-    lines.push(rng.pick(NOTE_KIND[a.kind]));
+    lines.push(rng.pick(NOTE_KIND[a.kind] || NOTE_KIND.object));
     const fam = MATERIAL_FAMILY[a.material] || "other";
-    if (rng.chance(0.7)) lines.push(rng.pick(NOTE_MATERIAL[fam]));
+    if (rng.chance(0.7)) lines.push(rng.pick(NOTE_MATERIAL[fam] || NOTE_MATERIAL.other));
+    if (culture.gallery && NOTE_GALLERY[culture.gallery] && rng.chance(0.55))
+      lines.push(rng.pick(NOTE_GALLERY[culture.gallery]));
     /* The strangeness is not uniform: deep finds almost always carry a line,
        shallow ones almost never do. */
     const tier = culture.eerie;
     const p = tier === 0 ? 0.10 : tier === 1 ? 0.55 : 0.92;
-    if (rng.chance(p)) lines.push(rng.pick(NOTE_EERIE[tier]));
+    if (rng.chance(p)) lines.push(rng.pick(NOTE_EERIE[tier] || NOTE_EERIE[0]));
     else if (tier === 0) lines.push(rng.pick(NOTE_EERIE[0]));
-    /* Sentences separated so the caption can breathe. */
     return lines.join(" ");
   }
 
@@ -343,18 +405,28 @@
     const rolledKind = pickKind(rng, culture);
     const kind = opts.kind || rolledKind;
 
-    const rolledObject = rng.pick(culture.objects);
+    /* Weighted object pick so rare types (skulls, geodes) still show up often
+       enough to fill a hall, without every find being the same. */
+    const rolledObject = culture.objects && culture.objects.length
+      ? culture.objects[Math.floor(Math.pow(rng.f(), 0.85) * culture.objects.length)]
+      : null;
     const objectType = kind === "object" ? (opts.objectType || rolledObject) : null;
 
     const rolledCond = rollWeighted(rng, CONDITIONS, opts.condBonus || 0);
     const condition = opts.condition
       ? (CONDITIONS.find((c) => c.id === opts.condition) || rolledCond) : rolledCond;
 
-    const rolledRare = rollWeighted(rng, RARITIES, opts.rareBonus || 0);
+    /* Special halls punch above ordinary rarity so a dinosaur skull or a
+       mineral cabinet piece feels like an event. */
+    let rareBonus = opts.rareBonus || 0;
+    if (culture.gallery === "dinosaurs") rareBonus += 0.08;
+    if (culture.gallery === "minerals") rareBonus += 0.05;
+    if (culture.gallery === "egypt" && kind !== "object") rareBonus += 0.04;
+    const rolledRare = rollWeighted(rng, RARITIES, rareBonus);
     const rarity = opts.rarity
       ? (RARITIES.find((r) => r.id === opts.rarity) || rolledRare) : rolledRare;
 
-    const material = materialOf(rng, kind, culture, objectType);
+    const material = opts.material || materialOf(rng, kind, culture, objectType);
 
     const a = {
       seed: seed >>> 0,
@@ -371,10 +443,16 @@
     a.notes = opts.notes || rolledNotes;
     a.readings = buildReadings(rng, a);
 
-    /* Significance drives everything the museum pays for. */
+    /* Significance drives everything the museum pays for. Themed showpieces
+       get a lift so filling the Egypt room or the dinosaur hall matters. */
     const kindWeight = kind === "painting" ? 1.35 : kind === "sculpture" ? 1.55 : 1.0;
+    let galleryWeight = 1;
+    if (culture.gallery === "dinosaurs") galleryWeight = 1.45;
+    else if (culture.gallery === "fossils") galleryWeight = 1.25;
+    else if (culture.gallery === "minerals") galleryWeight = 1.3;
+    else if (culture.gallery === "egypt") galleryWeight = 1.2;
     a.significance = Math.round(
-      (6 + depth * 0.055) * kindWeight * condition.mult * rarity.mult * 10) / 10;
+      (6 + depth * 0.055) * kindWeight * galleryWeight * condition.mult * rarity.mult * 10) / 10;
 
     /* The upgrade this piece teaches. Rolled here so it can be shown before
        the player commits to accessioning it. */
@@ -396,12 +474,18 @@
     handaxe: 15, torc: 17, sherd: 16, figurine: 17, astrolabe: 17, ledger: 17,
     mirror: 19, bottle: 19, tablet: 19, bell: 20, bonefrag: 21, blade: 24,
     vessel: 29, blockStone: 32, marker: 36,
+    scarab: 12, ankh: 16, ushabti: 22, canopic: 26, pectoral: 24,
+    dinoTooth: 18, dinoClaw: 20, ammonite: 22, trilobite: 18, crinoid: 16,
+    goldNugget: 14, pyrite: 16, fluorite: 18, opal: 15, meteorite: 22,
+    crystal: 24, geode: 28, fernFossil: 30, fishFossil: 32, coralFossil: 26,
+    eggFossil: 24, dinoBone: 36, trackSlab: 40,
   };
 
   const CARVER_SIZE = {
     venus: 15, neanderForm: 15, antler: 17, shabti: 21, cycladic: 23,
     dogu: 25, castHead: 27, bust: 31, anachronicBust: 31, beastStatue: 35,
-    coveredFace: 36, torso: 42, soldier: 45, colossal: 62, stele: 70,
+    coveredFace: 36, torso: 42, soldier: 45, crystalForm: 38, dinoSkull: 58,
+    colossal: 62, stele: 70,
   };
 
   const PAINTER_SIZE = {

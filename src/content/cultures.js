@@ -116,10 +116,11 @@
 
     /* ---------- 180–245 m: bronze ---------------------------------------- */
     { id: "egypt", name: "Dynastic Egypt", short: "Egyptian", region: "Lower Nile",
-      period: "c. 3100–332 BCE", eerie: 0,
+      period: "c. 3100–332 BCE", eerie: 0, gallery: "egypt",
       painting: { painter: "egyptian", frame: "fragment" }, paintNoun: "Piece of tomb painting",
-      sculpture: { carver: "shabti", materials: ["stone", "sand", "celadon"] }, sculptNoun: "Funerary figure",
-      objects: ["vessel", "bead", "tablet", "seal", "blade", "lamp", "figurine", "mirror"] },
+      sculpture: { carver: "shabti", materials: ["stone", "sand", "celadon", "gold"] }, sculptNoun: "Funerary figure",
+      objects: ["vessel", "bead", "tablet", "seal", "blade", "lamp", "figurine", "mirror",
+               "scarab", "canopic", "ankh", "ushabti", "pectoral"] },
 
     { id: "minoan", name: "Minoan Crete", short: "Minoan", region: "Aegean",
       period: "c. 2600–1100 BCE", eerie: 0,
@@ -191,7 +192,32 @@
       sculpture: { carver: "neanderForm", materials: ["stone", "bone", "obsid"] }, sculptNoun: "Worked ornament",
       objects: ["bead", "bonefrag", "handaxe", "needle"] },
 
-    /* ---------- 515–640 m: no accepted context --------------------------- */
+    /* ---------- deep time: geology the deposit was never meant to hold ----- */
+    { id: "cretaceous", name: "Cretaceous assemblage", short: "Cretaceous", region: "deep time",
+      period: "c. 145–66 Ma", eerie: 1, gallery: "dinosaurs",
+      sculpture: { carver: "dinoSkull", materials: ["bone", "stone", "chalk"] }, sculptNoun: "Dinosaur skull",
+      objects: ["dinoTooth", "dinoBone", "dinoClaw", "eggFossil", "trackSlab"] },
+
+    { id: "jurassic", name: "Jurassic assemblage", short: "Jurassic", region: "deep time",
+      period: "c. 201–145 Ma", eerie: 1, gallery: "dinosaurs",
+      sculpture: { carver: "dinoSkull", materials: ["bone", "stone"] }, sculptNoun: "Predator skull",
+      objects: ["dinoTooth", "dinoBone", "dinoClaw", "ammonite", "fernFossil"] },
+
+    { id: "triassic", name: "Triassic assemblage", short: "Triassic", region: "deep time",
+      period: "c. 252–201 Ma", eerie: 1, gallery: "dinosaurs",
+      sculpture: { carver: "dinoSkull", materials: ["bone", "stone"] }, sculptNoun: "Early reptile skull",
+      objects: ["dinoBone", "dinoTooth", "trackSlab", "fernFossil"] },
+
+    { id: "paleozoic", name: "Paleozoic fossils", short: "Paleozoic", region: "deep time",
+      period: "c. 541–252 Ma", eerie: 1, gallery: "fossils",
+      objects: ["trilobite", "ammonite", "fernFossil", "crinoid", "fishFossil", "coralFossil"] },
+
+    { id: "minerals", name: "Mineral veins", short: "Minerals", region: "geological",
+      period: "no single age", eerie: 0, gallery: "minerals",
+      sculpture: { carver: "crystalForm", materials: ["obsid", "granite", "marble"] }, sculptNoun: "Crystal cluster",
+      objects: ["geode", "crystal", "goldNugget", "meteorite", "opal", "pyrite", "fluorite"] },
+
+    /* ---------- unattributed --------------------------------------------- */
     { id: "unattr_a", name: "Unattributed, Group A", short: "Group A", region: "—",
       period: "no accepted context", eerie: 3,
       painting: { painter: "unattributed", frame: "wood" }, paintNoun: "Panel of unclear subject",
@@ -210,7 +236,7 @@
       sculpture: { carver: "coveredFace", materials: ["ice", "obsid"] }, sculptNoun: "Figure with hands raised",
       objects: ["seal", "tablet", "coin", "figurine", "torc"] },
 
-    /* ---------- below 640 m: the floor of the deposit -------------------- */
+    /* ---------- floor of the deposit ------------------------------------ */
     { id: "anachronic", name: "Anachronic assemblage", short: "Anachronic", region: "—",
       period: "postdates its own depth", eerie: 4,
       painting: { painter: "anachronic", frame: "gilt" }, paintNoun: "Panel showing a shaft",
@@ -221,9 +247,34 @@
   const byId = {};
   for (const c of CULTURES) byId[c.id] = c;
 
+  /* Named museum rooms that pull related finds out of the pure depth stack —
+     Egypt, dinosaurs, fossils, minerals — so the building feels curated. */
+  const GALLERIES = [
+    { id: "egypt", name: "Egyptian gallery", period: "Dynastic Nile", short: "Egypt",
+      theme: "egypt", order: 40 },
+    { id: "dinosaurs", name: "Hall of dinosaurs", period: "Mesozoic", short: "Dinosaurs",
+      theme: "dino", order: 80 },
+    { id: "fossils", name: "Fossil gallery", period: "Deep time", short: "Fossils",
+      theme: "fossil", order: 81 },
+    { id: "minerals", name: "Mineral vault", period: "Geological", short: "Minerals",
+      theme: "mineral", order: 82 },
+  ];
+  const galleryById = {};
+  for (const g of GALLERIES) galleryById[g.id] = g;
+
+  /* Which room a find belongs in by default. Themed cultures get a named
+     hall; everything else stays with its depth band. */
+  function galleryIdFor(a) {
+    if (a.room) return a.room;
+    const cu = byId[a.cultureId];
+    if (cu && cu.gallery) return cu.gallery;
+    return eraAt(a.depth).id;
+  }
+
   /* ---------- depth bands -------------------------------------------------
      Depth is time. Each band names its own stratum, so the shaft wall changes
-     colour as the centuries go by. */
+     colour as the centuries go by. Deep time (dinosaurs, fossils, minerals)
+     sits below the human record — curatorial order, not geology. */
 
   const ERAS = [
     { id: "overburden", name: "Overburden",              to: 18,   ramp: "soil",    period: "1950 – present",
@@ -240,11 +291,17 @@
       cultures: ["egypt", "minoan", "sumer", "shang", "indus"], find: 9.0 },
     { id: "neolithic",  name: "Neolithic horizon",       to: 320,  ramp: "chalk",   period: "10000 – 3000 BCE",
       cultures: ["catal", "jomon", "cucuteni", "gobekli"], find: 10.0 },
-    { id: "palaeo",     name: "Upper Palaeolithic",      to: 410,  ramp: "peat",    period: "40000 – 10000 BCE",
+    { id: "palaeo",     name: "Upper Palaeolithic",      to: 400,  ramp: "peat",    period: "40000 – 10000 BCE",
       cultures: ["magdalenian", "gravettian"], find: 11.0 },
-    { id: "longdark",   name: "The long dark",           to: 515,  ramp: "permaf",  period: "200000 – 40000 BCE",
+    { id: "longdark",   name: "The long dark",           to: 480,  ramp: "permaf",  period: "200000 – 40000 BCE",
       cultures: ["neanderthal", "denisovan"], find: 12.0 },
-    { id: "unattr",     name: "Unattributed deposit",    to: 640,  ramp: "basalt",  period: "no accepted context",
+    { id: "mesozoic",   name: "Mesozoic horizon",        to: 560,  ramp: "basalt",  period: "252 – 66 Ma",
+      cultures: ["cretaceous", "jurassic", "triassic"], find: 11.5 },
+    { id: "fossils",    name: "Paleozoic fossils",       to: 620,  ramp: "chalk",   period: "541 – 252 Ma",
+      cultures: ["paleozoic"], find: 12.0 },
+    { id: "minerals",   name: "Mineral veins",           to: 660,  ramp: "gravel",  period: "geological",
+      cultures: ["minerals"], find: 11.0 },
+    { id: "unattr",     name: "Unattributed deposit",    to: 740,  ramp: "basalt",  period: "no accepted context",
       cultures: ["unattr_a", "unattr_b", "unattr_c"], find: 13.0 },
     { id: "floor",      name: "Deposit floor",           to: 1e9,  ramp: "sterile", period: "anachronic",
       cultures: ["anachronic", "unattr_c"], find: 14.0 },
@@ -258,5 +315,8 @@
   const eraAt = (d) => ERAS.find((e) => d < e.to) || ERAS[ERAS.length - 1];
   const eraIndex = (d) => Math.max(0, ERAS.findIndex((e) => d < e.to));
 
-  S7.cultures = { CULTURES, byId, ERAS, eraAt, eraIndex, MAX_DEPTH };
+  S7.cultures = {
+    CULTURES, byId, ERAS, eraAt, eraIndex, MAX_DEPTH,
+    GALLERIES, galleryById, galleryIdFor,
+  };
 })(window.S7 = window.S7 || {});

@@ -48,7 +48,15 @@
              "that took a very long time. It was made because somebody wanted it to exist.",
       beat: "Below four hundred metres the material is <b>older than art is supposed to be</b>. It is also better made." },
 
-    { depth: 548, culture: "unattr_a", kind: "sculpture",
+    { depth: 520, culture: "cretaceous", kind: "sculpture",
+      condition: "fine", rarity: "unique",
+      name: "Dinosaur skull, complete",
+      notes: "A theropod skull, mineralised, recovered from a packed void at five hundred and twenty metres. " +
+             "There is no river gravel, no bone bed, no natural context of any kind. It was wrapped, " +
+             "set upright, and covered. Somebody wanted a dinosaur in the collection.",
+      beat: "Below the human record the deposit holds <b>deep time on purpose</b>. This is a museum in the ground." },
+
+    { depth: 680, culture: "unattr_a", kind: "sculpture",
       condition: "excep", rarity: "unique",
       name: "Seated form, hands raised",
       notes: "The eleventh of this form. Seated, arms raised, hands covering the face; the face is not modelled " +
@@ -57,10 +65,10 @@
              "literature that anything below this depth belongs to.",
       beat: "Unattributed. Not undated — <b>unattributable</b>. There is no culture in the record that made these." },
 
-    { depth: 706, culture: "anachronic", kind: "object", objectType: "watch",
+    { depth: 760, culture: "anachronic", kind: "object", objectType: "watch",
       condition: "sound", rarity: "unique",
       name: "Wristwatch",
-      notes: "A mechanical wristwatch on a perished leather strap, recovered from sealed fill at 706 metres. " +
+      notes: "A mechanical wristwatch on a perished leather strap, recovered from sealed fill at 760 metres. " +
              "The sediment above shows no intrusion of any kind: no shaft, no void, no disturbance. " +
              "The layers above this watch have been undisturbed for longer than wristwatches have existed. " +
              "I have left the age field blank. I am not able to fill it in a way that is true.",

@@ -238,6 +238,17 @@
     return !!(r && r.era && !r.foyer && !r.amenity && r.exhibits && r.exhibits.length);
   }
 
+  /* Theme tint for special halls so Egypt / dinosaurs / minerals read as
+     destinations, not just another beige corridor. */
+  function themeWall(r) {
+    if (!r.theme) return null;
+    if (r.theme === "egypt") return { hi: "#3a3220", lo: "#2a2214", accent: "#c79a42" };
+    if (r.theme === "dino") return { hi: "#2a3028", lo: "#1c221a", accent: "#8a9a6a" };
+    if (r.theme === "fossil") return { hi: "#2e2a24", lo: "#201c18", accent: "#a09070" };
+    if (r.theme === "mineral") return { hi: "#242838", lo: "#181c28", accent: "#6a8ab0" };
+    return null;
+  }
+
   /* Where an exhibit's artwork sits, in world pixels — driven by the object's
      own physical size, so a bead occupies a small case at eye level and a
      colossal head runs from the floor almost to the ceiling. */
@@ -308,20 +319,21 @@
   }
 
   /* Wall: a vertical wash, panel joins, and the picture rail. */
-  function drawWall(x0, w) {
+  function drawWall(x0, w, theme) {
+    const top = theme ? theme.hi : C.wallTop;
+    const hi = theme ? theme.hi : C.wallHi;
+    const lo = theme ? theme.lo : C.wallLo;
+    const shadeLo = theme ? theme.lo : C.wallShade;
     for (let y = WALL_TOP; y < FLOOR_Y; y++) {
       const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
-      /* brightest just under the lights, falling away to the skirting */
-      const shade = t < 0.16 ? C.wallTop : t < 0.46 ? C.wallHi : t < 0.82 ? C.wallLo : C.wallShade;
+      const shade = t < 0.16 ? top : t < 0.46 ? hi : t < 0.82 ? lo : shadeLo;
       rect(x0, y, w, 1, shade);
     }
-    /* panel joins, kept faint — at full contrast the wall reads as bathroom
-       tiling rather than a painted gallery */
     ctx.globalAlpha = 0.35;
     for (let px = Math.ceil(x0 / 58) * 58; px < x0 + w; px += 58)
       rect(px, WALL_TOP, 1, FLOOR_Y - WALL_TOP - 5, C.wallSeam);
     ctx.globalAlpha = 1;
-    rect(x0, RAIL_Y, w, 1, C.rail);
+    rect(x0, RAIL_Y, w, 1, theme && theme.accent ? theme.accent : C.rail);
     rect(x0, RAIL_Y + 1, w, 1, "#00000038");
     rect(x0, FLOOR_Y - 5, w, 5, C.skirt);
     rect(x0, FLOOR_Y - 5, w, 1, "#75643f");
@@ -373,7 +385,7 @@
     if (x1 < cam - 40 || x0 > cam + VIEW + 40) return;
 
     const dim = !!r.deepgal;
-    drawWall(x0, r.width);
+    drawWall(x0, r.width, themeWall(r));
     drawFloor(x0, r.width);
     drawCeiling(x0, r.width, dim);
 

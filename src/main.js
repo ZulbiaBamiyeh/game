@@ -379,17 +379,46 @@
     const here = S7.galleryView.currentRoom();
     $("gal-room").textContent = here ? here.era.name : "—";
     $("gal-period").textContent = here && here.era.period ? here.era.period : "";
-    const dots = $("gal-dots");
-    if (dots.children.length !== rooms.length) {
-      dots.innerHTML = "";
+
+    /* Named room strip — much easier than tiny dots once the museum has wings. */
+    const map = $("gal-map");
+    const jump = $("gal-jump");
+    const sig = rooms.map((r) => r.era.id + ":" + (r.exhibits ? r.exhibits.length : 0)).join("|");
+    if (map.dataset.sig !== sig) {
+      map.dataset.sig = sig;
+      map.innerHTML = "";
+      jump.innerHTML = "";
       rooms.forEach((r, i) => {
-        const d = document.createElement("i");
-        d.title = r.era.name;
-        d.addEventListener("click", () => S7.galleryView.goToRoom(i));
-        dots.appendChild(d);
+        const n = r.exhibits ? r.exhibits.length : 0;
+        const label = (r.era.short || r.era.name || "Room").replace(/ horizon$/i, "");
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "galchip" + (r.featured ? " featured" : "") + (r.foyer ? " foyer" : "");
+        chip.innerHTML = "<b>" + V.esc(label) + "</b>" +
+          (n ? "<span>" + n + "</span>" : r.foyer || r.amenity ? "" : "<span>—</span>");
+        chip.title = r.era.name + (r.era.period ? " · " + r.era.period : "");
+        chip.addEventListener("click", () => S7.galleryView.goToRoom(i));
+        map.appendChild(chip);
+
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = r.era.name + (n ? " (" + n + ")" : "");
+        jump.appendChild(opt);
       });
     }
-    rooms.forEach((r, i) => dots.children[i].classList.toggle("on", r === here));
+    const chips = map.querySelectorAll(".galchip");
+    rooms.forEach((r, i) => {
+      if (chips[i]) chips[i].classList.toggle("on", r === here);
+    });
+    if (here) {
+      const hi = rooms.indexOf(here);
+      if (hi >= 0) {
+        jump.value = String(hi);
+        const onChip = chips[hi];
+        if (onChip && onChip.scrollIntoView)
+          onChip.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      }
+    }
 
     const sv = M.survey(S);
     $("gal-crowd").textContent = sv.count === 0
@@ -542,6 +571,10 @@
     $("shaft-recenter").addEventListener("click", () => S7.shaftView.recenter());
     $("gal-prev").addEventListener("click", () => S7.galleryView.nudge(-1));
     $("gal-next").addEventListener("click", () => S7.galleryView.nudge(1));
+    $("gal-jump").addEventListener("change", (e) => {
+      const i = parseInt(e.target.value, 10);
+      if (!isNaN(i)) S7.galleryView.goToRoom(i);
+    });
     $("gal-arrange").addEventListener("click", () => {
       const on = !S7.galleryView.isArranging();
       S7.galleryView.setArrange(on);

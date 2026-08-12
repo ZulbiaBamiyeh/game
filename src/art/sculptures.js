@@ -467,6 +467,44 @@
         cw: 4, ch: 4, ramp: "wrong", t: 0.50, density: 0.7, seed: rng.int(1, 999) });
       outline(B, mat, 0);
     },
+
+    /* Dinosaur skull — big orbits, snout, teeth suggestion. Museum showpiece. */
+    dinoSkull(B, rng, mat) {
+      plinth(B, rng, "granite", 58);
+      /* cranium */
+      vol(B, 30, 28, 16, 14, mat, { t: 0.32, gain: 0.50, seed: rng.int(1, 99) });
+      /* snout */
+      shaft(B, 44, 26, 40, 8, 5, mat, { t: 0.30, gain: 0.44, seed: rng.int(1, 99) });
+      polyFill(B, [[48, 30], [58, 34], [48, 38]], () => tone(mat, 0.36));
+      /* orbit */
+      ellipseFill(B, 26, 24, 6, 5, (x, y, dx, dy, d) =>
+        d > 0.9 ? null : tone(mat, clamp(0.12 + d * 0.2, 0, 1)));
+      /* teeth along jaw */
+      for (let i = 0; i < 6; i++) {
+        const tx = 42 + i * 2.2;
+        polyFill(B, [[tx, 38], [tx + 1.5, 38], [tx + 0.7, 44]], () => tone(mat, 0.48));
+      }
+      /* jaw hinge */
+      vol(B, 34, 40, 10, 6, mat, { t: 0.28, gain: 0.4, seed: rng.int(1, 99) });
+      if (rng.chance(0.45)) fracture(B, rng, [rng.int(20, 40), rng.int(18, 32)], rng.int(4, 8));
+      burial(B, rng, mat);
+      outline(B, mat, 0);
+    },
+
+    /* Crystal cluster on a mineral base. */
+    crystalForm(B, rng, mat) {
+      const gem = rng.pick([mat, "lapis", "malach", "cinnab", "gold"]);
+      plinth(B, rng, "granite", 58);
+      rectFill(B, 16, 44, 48, 56, (x, y) =>
+        tone("stone", clamp(0.28 + fbm(x * 0.3, y * 0.3, 4) * 0.18, 0, 1)));
+      for (let i = 0; i < 6; i++) {
+        const x0 = 18 + i * 6 + rng.int(-1, 1);
+        const tip = 10 + rng.int(0, 12);
+        polyFill(B, [[x0, 48], [x0 + 7, 48], [x0 + 3, tip]], (x, y) =>
+          tone(gem, clamp(0.38 + (48 - y) / 40 * 0.35 + fbm(x * 0.4, y * 0.3, 3) * 0.12, 0, 1)));
+      }
+      outline(B, gem, 0);
+    },
   };
 
   /* Material choice is per-piece and per-culture. */

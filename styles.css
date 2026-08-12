@@ -244,14 +244,38 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 }
 .galbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:8px}
 .galroom{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .galroom b{color:var(--bone);font-weight:400;margin-right:8px}
-.galtools{display:flex;align-items:center;gap:12px;flex:none}
+.galtools{display:flex;align-items:center;gap:10px;flex:none}
 .galtools .ghost{padding:4px 9px}
 .galtools .ghost.on{color:var(--ochre);border-color:var(--ochre-2);background:#2b2213}
-.galdots{display:flex;gap:4px;flex:none}
-.galdots i{width:6px;height:6px;background:#2d2617;border:1px solid var(--line);cursor:pointer;display:block}
-.galdots i.on{background:var(--ochre);border-color:var(--ochre)}
+.galjump select{
+  font:10px/1.2 var(--mono);color:var(--bone);background:var(--panel-2);
+  border:1px solid var(--line);padding:5px 8px;max-width:180px;cursor:pointer;
+}
+.galjump select:focus-visible{outline:2px solid var(--ochre);outline-offset:1px}
+.galmap{
+  display:flex;gap:5px;overflow-x:auto;padding:8px 0 2px;margin-top:2px;
+  scrollbar-width:thin;
+}
+.galchip{
+  flex:none;font:inherit;color:var(--ink-2);background:var(--panel-2);
+  border:1px solid var(--line);padding:5px 9px;cursor:pointer;text-align:left;
+  min-width:4.5em;transition:border-color .12s,background .12s,color .12s;
+}
+.galchip b{display:block;font-size:10px;font-weight:400;color:var(--bone);
+  letter-spacing:.04em;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.galchip span{font-size:9px;color:var(--ink-3)}
+.galchip:hover{border-color:var(--ochre-2)}
+.galchip.on{border-color:var(--ochre);background:#2b2213;color:var(--ochre)}
+.galchip.on b{color:var(--ochre)}
+.galchip.featured{border-color:#5a4a28}
+.galchip.featured b{color:var(--ochre-2)}
+.galchip.foyer b{letter-spacing:.08em;text-transform:uppercase;font-size:9px}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
 
 .caption{margin-top:9px;border-top:1px solid var(--line);padding-top:9px;min-height:52px}
 .caphint{font-size:10.5px;color:var(--ink-3);margin:0;line-height:1.6}

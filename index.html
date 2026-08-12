@@ -99,9 +99,13 @@
           <div class="galroom"><b id="gal-room">—</b><span id="gal-period"></span></div>
           <div class="galtools">
             <button id="gal-arrange" class="ghost" type="button">Rehang</button>
-            <div class="galdots" id="gal-dots"></div>
+            <label class="galjump">
+              <span class="sr-only">Jump to room</span>
+              <select id="gal-jump" aria-label="Jump to room"></select>
+            </label>
           </div>
         </div>
+        <div class="galmap" id="gal-map" role="navigation" aria-label="Museum rooms"></div>
         <div class="caption" id="gal-caption">
           <p class="caphint">Click a piece to read its label. Double-click for the full record.</p>
         </div>

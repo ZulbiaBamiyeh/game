@@ -84,6 +84,9 @@
     neolithic: "Ten thousand years down, still packed deliberately",
     palaeo: "Cave art does not travel. This did",
     longdark: "Older than art is supposed to be",
+    mesozoic: "Dinosaurs. Packed. In a human deposit",
+    fossils: "Deep time, carefully boxed",
+    minerals: "Cabinet specimens, not river gravel",
     unattr: "No accepted context. None unaccepted either",
     floor: "Sterile fill. It did not settle here",
   };
