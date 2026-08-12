@@ -293,29 +293,85 @@
   function pickCulture(rng, depth) {
     const era = C.eraAt(depth);
     const ids = era.cultures;
-    /* Mild bias toward the first listed culture, but enough flat randomness
-       that a dig through the same band does not feel like a fixed checklist. */
-    const idx = Math.min(ids.length - 1, Math.floor(Math.pow(rng.f(), 1.15) * ids.length));
+    if (ids.length === 1) return C.byId[ids[0]];
+
+    /* Position inside the band: 0 at the top, 1 at the bottom. */
+    const ei = C.eraIndex(depth);
+    const from = ei <= 0 ? 0 : C.ERAS[ei - 1].to;
+    const span = Math.max(1, era.to >= 1e8 ? C.MAX_DEPTH - from : era.to - from);
+    const pos = Math.max(0, Math.min(1, (depth - from) / span));
+
+    /* Geological bands list youngest first — deeper in the band → older taxa.
+       Human bands keep a mild first-culture bias with real scatter. */
+    const geological = !!(era.id === "mesozoic" || era.id === "fossils" || era.id === "minerals");
+    let idx;
+    if (geological) {
+      /* Blend depth position with noise so the floor of the band is older. */
+      const u = Math.min(0.999, Math.max(0, pos * 0.75 + rng.f() * 0.35));
+      idx = Math.min(ids.length - 1, Math.floor(u * ids.length));
+    } else {
+      idx = Math.min(ids.length - 1, Math.floor(Math.pow(rng.f(), 1.15) * ids.length));
+    }
     return C.byId[ids[idx]];
   }
 
-  function pickKind(rng, culture) {
+  function pickKind(rng, culture, depth) {
+    const deep = depth / C.MAX_DEPTH;
     const opts = [{ k: "object", w: 58 }];
     if (culture.painting) opts.push({ k: "painting", w: 22 });
     if (culture.sculpture) opts.push({ k: "sculpture", w: 20 });
     /* Minerals and fossils are mostly specimens, not pictures. */
     if (culture.gallery === "minerals" || culture.gallery === "fossils")
-      return rng.weighted([{ k: "object", w: 78 }, { k: "sculpture", w: culture.sculpture ? 22 : 0 }], (o) => o.w).k;
+      return rng.weighted([
+        { k: "object", w: 78 },
+        { k: "sculpture", w: culture.sculpture ? 18 + deep * 20 : 0 },
+      ], (o) => o.w).k;
     if (culture.gallery === "dinosaurs")
-      return rng.weighted([{ k: "object", w: 62 }, { k: "sculpture", w: culture.sculpture ? 38 : 0 }], (o) => o.w).k;
+      return rng.weighted([
+        { k: "object", w: 55 },
+        { k: "sculpture", w: culture.sculpture ? 30 + deep * 35 : 0 },
+      ], (o) => o.w).k;
     return rng.weighted(opts, (o) => o.w).k;
   }
 
+  /* How hard the deep end of the rarity table is pushed. Near the surface this
+     is almost nothing; by the floor uniques are realistic. */
+  function depthRarityBonus(depth) {
+    const t = Math.max(0, Math.min(1.15, depth / C.MAX_DEPTH));
+    return Math.pow(t, 1.25) * 0.62;
+  }
+
   function rollWeighted(rng, table, bonusLast) {
-    const w = table.map((t, i) => t.w * (i >= table.length - 2 ? 1 + (bonusLast || 0) * 8 : 1));
+    const w = table.map((t, i) => {
+      /* Lift the rare end of the table; higher tiers feel depth more. */
+      const tier = i / Math.max(1, table.length - 1);
+      const lift = 1 + (bonusLast || 0) * (2 + tier * 10);
+      return t.w * lift;
+    });
     let total = w.reduce((a, b) => a + b, 0), t = rng.f() * total;
     for (let i = 0; i < w.length; i++) { t -= w[i]; if (t <= 0) return table[i]; }
     return table[0];
+  }
+
+  /* Showpiece object types — more likely deeper, so a skull or geode is a
+     reward for staying in the hole, not a surface lottery ticket. */
+  const SHOWPIECE = {
+    egypt: ["canopic", "pectoral", "ankh", "scarab"],
+    dinosaurs: ["dinoBone", "eggFossil", "trackSlab", "dinoTooth", "dinoClaw"],
+    fossils: ["fishFossil", "ammonite", "trilobite", "fernFossil"],
+    minerals: ["geode", "meteorite", "crystal", "goldNugget", "opal"],
+  };
+
+  function pickObjectType(rng, culture, depth) {
+    const objs = culture.objects;
+    if (!objs || !objs.length) return null;
+    const deep = depth / C.MAX_DEPTH;
+    const pool = SHOWPIECE[culture.gallery];
+    if (pool && deep > 0.35 && rng.chance(0.12 + deep * 0.45)) {
+      const hits = objs.filter((o) => pool.indexOf(o) >= 0);
+      if (hits.length) return rng.pick(hits);
+    }
+    return objs[Math.floor(Math.pow(rng.f(), 0.85) * objs.length)];
   }
 
   function materialOf(rng, kind, culture, objectType) {
@@ -402,26 +458,25 @@
     const rolledCulture = pickCulture(rng, depth);
     const culture = opts.culture ? (C.byId[opts.culture] || rolledCulture) : rolledCulture;
 
-    const rolledKind = pickKind(rng, culture);
+    const rolledKind = pickKind(rng, culture, depth);
     const kind = opts.kind || rolledKind;
 
-    /* Weighted object pick so rare types (skulls, geodes) still show up often
-       enough to fill a hall, without every find being the same. */
-    const rolledObject = culture.objects && culture.objects.length
-      ? culture.objects[Math.floor(Math.pow(rng.f(), 0.85) * culture.objects.length)]
-      : null;
+    /* Object type: deeper levels bias toward showpieces (skulls, geodes, etc.). */
+    const rolledObject = kind === "object" ? pickObjectType(rng, culture, depth) : null;
     const objectType = kind === "object" ? (opts.objectType || rolledObject) : null;
 
     const rolledCond = rollWeighted(rng, CONDITIONS, opts.condBonus || 0);
     const condition = opts.condition
       ? (CONDITIONS.find((c) => c.id === opts.condition) || rolledCond) : rolledCond;
 
-    /* Special halls punch above ordinary rarity so a dinosaur skull or a
-       mineral cabinet piece feels like an event. */
-    let rareBonus = opts.rareBonus || 0;
-    if (culture.gallery === "dinosaurs") rareBonus += 0.08;
-    if (culture.gallery === "minerals") rareBonus += 0.05;
-    if (culture.gallery === "egypt" && kind !== "object") rareBonus += 0.04;
+    /* Rarity is a depth story: the surface is mostly common; the floor of the
+       deposit is where significant and unique material lives. Gallery type
+       adds a little, but depth does the real work. */
+    let rareBonus = (opts.rareBonus || 0) + depthRarityBonus(depth);
+    if (culture.gallery === "dinosaurs") rareBonus += 0.04;
+    if (culture.gallery === "minerals") rareBonus += 0.03;
+    if (culture.gallery === "fossils") rareBonus += 0.03;
+    if (culture.gallery === "egypt") rareBonus += 0.02;
     const rolledRare = rollWeighted(rng, RARITIES, rareBonus);
     const rarity = opts.rarity
       ? (RARITIES.find((r) => r.id === opts.rarity) || rolledRare) : rolledRare;
@@ -443,16 +498,18 @@
     a.notes = opts.notes || rolledNotes;
     a.readings = buildReadings(rng, a);
 
-    /* Significance drives everything the museum pays for. Themed showpieces
-       get a lift so filling the Egypt room or the dinosaur hall matters. */
+    /* Significance: depth and rarity do most of the work; themed showpieces
+       (a dinosaur skull, a canopic jar) still pay more so the halls feel won. */
     const kindWeight = kind === "painting" ? 1.35 : kind === "sculpture" ? 1.55 : 1.0;
     let galleryWeight = 1;
-    if (culture.gallery === "dinosaurs") galleryWeight = 1.45;
-    else if (culture.gallery === "fossils") galleryWeight = 1.25;
-    else if (culture.gallery === "minerals") galleryWeight = 1.3;
-    else if (culture.gallery === "egypt") galleryWeight = 1.2;
+    if (culture.gallery === "dinosaurs") galleryWeight = 1.35;
+    else if (culture.gallery === "fossils") galleryWeight = 1.2;
+    else if (culture.gallery === "minerals") galleryWeight = 1.22;
+    else if (culture.gallery === "egypt") galleryWeight = 1.15;
+    const depthWeight = 1 + depth * 0.0012;
     a.significance = Math.round(
-      (6 + depth * 0.055) * kindWeight * galleryWeight * condition.mult * rarity.mult * 10) / 10;
+      (5 + depth * 0.075) * kindWeight * galleryWeight * depthWeight *
+      condition.mult * rarity.mult * 10) / 10;
 
     /* The upgrade this piece teaches. Rolled here so it can be shown before
        the player commits to accessioning it. */

@@ -193,6 +193,7 @@
       objects: ["bead", "bonefrag", "handaxe", "needle"] },
 
     /* ---------- deep time: geology the deposit was never meant to hold ----- */
+    /* Listed youngest → oldest so deeper picks inside the band land on older taxa. */
     { id: "cretaceous", name: "Cretaceous assemblage", short: "Cretaceous", region: "deep time",
       period: "c. 145–66 Ma", eerie: 1, gallery: "dinosaurs",
       sculpture: { carver: "dinoSkull", materials: ["bone", "stone", "chalk"] }, sculptNoun: "Dinosaur skull",
@@ -295,16 +296,18 @@
       cultures: ["magdalenian", "gravettian"], find: 11.0 },
     { id: "longdark",   name: "The long dark",           to: 480,  ramp: "permaf",  period: "200000 – 40000 BCE",
       cultures: ["neanderthal", "denisovan"], find: 12.0 },
+    /* Deep time: younger geology first (shallower), older below — so a
+       dinosaur is already a deep find, and Paleozoic fossils sit deeper still. */
     { id: "mesozoic",   name: "Mesozoic horizon",        to: 560,  ramp: "basalt",  period: "252 – 66 Ma",
-      cultures: ["cretaceous", "jurassic", "triassic"], find: 11.5 },
-    { id: "fossils",    name: "Paleozoic fossils",       to: 620,  ramp: "chalk",   period: "541 – 252 Ma",
-      cultures: ["paleozoic"], find: 12.0 },
-    { id: "minerals",   name: "Mineral veins",           to: 660,  ramp: "gravel",  period: "geological",
-      cultures: ["minerals"], find: 11.0 },
-    { id: "unattr",     name: "Unattributed deposit",    to: 740,  ramp: "basalt",  period: "no accepted context",
-      cultures: ["unattr_a", "unattr_b", "unattr_c"], find: 13.0 },
+      cultures: ["cretaceous", "jurassic", "triassic"], find: 12.5 },
+    { id: "fossils",    name: "Paleozoic fossils",       to: 630,  ramp: "chalk",   period: "541 – 252 Ma",
+      cultures: ["paleozoic"], find: 13.0 },
+    { id: "minerals",   name: "Mineral veins",           to: 680,  ramp: "gravel",  period: "geological",
+      cultures: ["minerals"], find: 12.5 },
+    { id: "unattr",     name: "Unattributed deposit",    to: 750,  ramp: "basalt",  period: "no accepted context",
+      cultures: ["unattr_a", "unattr_b", "unattr_c"], find: 14.0 },
     { id: "floor",      name: "Deposit floor",           to: 1e9,  ramp: "sterile", period: "anachronic",
-      cultures: ["anachronic", "unattr_c"], find: 14.0 },
+      cultures: ["anachronic", "unattr_c"], find: 15.0 },
   ];
 
   /* The shaft has a bottom, and it is a real one: below this is bedrock that
