@@ -922,6 +922,152 @@
 
   }
 
+  /* Building mass for upper/basement so the cutaway is never a black hole.
+     When `locked`, add construction clutter and a "not open" plate. When open,
+     just the structure shows behind rooms that don't span the full width. */
+  function drawStoreyShell(floor, totalW, kind, locked) {
+    const x0 = Math.min(0, camX - 20);
+    const w = Math.max(totalW + 40, camX + VIEW_W + 40) - x0;
+    activeFloor = floor;
+    roomLocal = true;
+
+    if (kind === "basement") {
+      for (let y = WALL_TOP; y < FLOOR_Y; y++) {
+        const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
+        rect(x0, y, w, 1, t < 0.35 ? "#2a241c" : t < 0.7 ? "#221c16" : "#1a1610");
+      }
+      for (let y = WALL_TOP + 10; y < FLOOR_Y - 6; y += 7) {
+        rect(x0, y, w, 1, "#14100c");
+        const off = (Math.floor(y / 7) % 2) * 8;
+        for (let px = x0 + off; px < x0 + w; px += 16)
+          rect(px, y - 6, 1, 6, "#14100c");
+      }
+      for (let y = FLOOR_Y; y < V.H; y++)
+        rect(x0, y, w, 1, (y + Math.floor(x0)) % 3 ? "#1c1812" : "#16120c");
+      rect(x0, FLOOR_Y - 4, w, 4, "#2a2218");
+      rect(x0, FLOOR_Y - 4, w, 1, "#3a3020");
+      /* Building bones under the museum */
+      for (let i = 0; i < 8; i++) {
+        const cx = x0 + 50 + i * 70;
+        if (cx > x0 + w - 30) break;
+        rect(cx - 7, WALL_TOP + 8, 14, FLOOR_Y - WALL_TOP - 12, "#3a3228");
+        rect(cx - 9, WALL_TOP + 6, 18, 5, "#4a4034");
+        rect(cx - 8, FLOOR_Y - 8, 16, 6, "#2a2418");
+      }
+      rect(x0 + 20, WALL_TOP + 10, w - 40, 3, "#3a3426");
+      rect(x0 + 20, WALL_TOP + 10, w - 40, 1, "#5a4e35");
+
+      if (locked) {
+        for (let i = 0; i < 8; i++) {
+          const cx = x0 + 50 + i * 70;
+          if (cx > x0 + w - 30) break;
+          rect(cx + 14, FLOOR_Y - 18, 16, 14, "#4a3f28");
+          rect(cx + 14, FLOOR_Y - 18, 16, 2, "#6b5a3a");
+          rect(cx + 16, FLOOR_Y - 26, 12, 10, "#5a4a30");
+          rect(cx + 17, FLOOR_Y - 24, 4, 2, "#3a3426");
+          if (i % 2 === 0) {
+            rect(cx - 28, FLOOR_Y - 14, 14, 10, "#3a3426");
+            rect(cx - 26, FLOOR_Y - 12, 4, 3, "#c79a4233");
+          }
+        }
+        const dx = x0 + Math.min(w * 0.45, 180);
+        rect(dx - 16, 48, 32, FLOOR_Y - 48, "#12100c");
+        rect(dx - 16, 48, 32, 2, "#4a4030");
+        rect(dx - 14, 52, 28, FLOOR_Y - 56, "#1a160e");
+        for (let y = 58; y < FLOOR_Y - 12; y += 8) rect(dx - 12, y, 24, 1, "#2a2418");
+        rect(dx + 6, 82, 4, 5, "#8a6a2c");
+        rect(dx + 7, 83, 2, 2, "#c79a42");
+        for (let px = x0 + 40; px < x0 + w - 30; px += 48)
+          rect(px, WALL_TOP + 12, 3, 10, "#3a3426");
+        const tx = x0 + w / 2;
+        rect(tx - 52, 34, 104, 16, "#0c0a06");
+        rect(tx - 52, 34, 104, 1, "#5a4e35");
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "600 10px " + FONT_UI;
+        fillTextShadow("BASEMENT — SEALED", sx(tx), syR(42), "#8a7a5a", "#00000088");
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+      }
+    } else {
+      for (let y = WALL_TOP; y < FLOOR_Y; y++) {
+        const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
+        rect(x0, y, w, 1, t < 0.4 ? "#3a3428" : t < 0.75 ? "#322c22" : "#2a241c");
+      }
+      for (let y = FLOOR_Y; y < V.H; y++)
+        rect(x0, y, w, 1, y % 2 ? "#2a2218" : "#241e14");
+      ctx.globalAlpha = 0.35;
+      for (let y = FLOOR_Y + 4; y < V.H; y += 5) rect(x0, y, w, 1, "#1a160e");
+      ctx.globalAlpha = 1;
+      rect(x0, FLOOR_Y - 5, w, 5, "#3a3226");
+
+      if (locked) {
+        for (let i = 0; i < 6; i++) {
+          const wx = x0 + 40 + i * 85;
+          if (wx > x0 + w - 50) break;
+          rect(wx, 42, 36, 40, "#1a160d");
+          rect(wx, 42, 36, 1, "#5a4e35");
+          rect(wx + 2, 44, 32, 36, "#2a2418");
+          rect(wx + 4, 48, 28, 3, "#4a3f28");
+          rect(wx + 4, 60, 28, 3, "#4a3f28");
+          rect(wx + 4, 72, 28, 3, "#4a3f28");
+          rect(wx + 16, 46, 3, 32, "#4a3f28");
+          rect(wx - 10, WALL_TOP + 4, 3, FLOOR_Y - WALL_TOP - 8, "#5a4e35");
+          rect(wx + 40, WALL_TOP + 4, 3, FLOOR_Y - WALL_TOP - 8, "#5a4e35");
+          rect(wx - 12, 70, 56, 2, "#6b5a3a");
+        }
+        for (let i = 0; i < 5; i++) {
+          const px = x0 + 70 + i * 95;
+          if (px > x0 + w - 40) break;
+          rect(px - 12, 92, 28, 22, "#5a5448");
+          rect(px - 14, 90, 32, 4, "#7a7468");
+          rect(px - 10, 96, 24, 2, "#3a3426");
+          ctx.globalAlpha = 0.25;
+          rect(px - 12, 94, 1, 18, "#2a2418");
+          rect(px + 14, 94, 1, 18, "#2a2418");
+          ctx.globalAlpha = 1;
+        }
+        rect(x0 + 24, FLOOR_Y - 12, 8, 8, "#4a6b45");
+        rect(x0 + 34, FLOOR_Y - 10, 7, 6, "#6b5a8a");
+        rect(x0 + 22, FLOOR_Y - 14, 10, 2, "#3a3426");
+        for (let s = 0; s < 6; s++) {
+          rect(x0 + w - 50, 50 + s * 10, 14, 2, "#5a4e35");
+          rect(x0 + w - 50, 50 + s * 10, 2, 10, "#4a3f28");
+          rect(x0 + w - 38, 50 + s * 10, 2, 10, "#4a3f28");
+        }
+        const tx = x0 + w / 2;
+        rect(tx - 58, 30, 116, 16, "#0c0a06");
+        rect(tx - 58, 30, 116, 1, "#c79a42");
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "600 10px " + FONT_UI;
+        fillTextShadow("UPPER FLOOR — NOT OPEN", sx(tx), syR(38), "#c4b896", "#00000088");
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+      }
+    }
+
+    roomLocal = false;
+  }
+
+  /* Structural slab between storeys — the cutaway edge of the floor above. */
+  function drawStoreySlab(floor) {
+    const base = V.floorBase(floor);
+    const y = base + V.H - 4;
+    const x0 = Math.min(0, camX - 20);
+    const w = Math.max((layoutCache ? layoutCache.total : VIEW_W) + 40, camX + VIEW_W + 40) - x0;
+    ctx.fillStyle = "#1a160e";
+    ctx.fillRect(sx(x0), sy(y), Math.round(w * SCALE), Math.round(10 * SCALE));
+    ctx.fillStyle = "#2a2418";
+    ctx.fillRect(sx(x0), sy(y), Math.round(w * SCALE), Math.round(2 * SCALE));
+    ctx.fillStyle = "#0c0a06";
+    ctx.fillRect(sx(x0), sy(y + 8), Math.round(w * SCALE), Math.round(2 * SCALE));
+    /* joist tips */
+    ctx.fillStyle = "#3a3226";
+    for (let px = Math.ceil(x0 / 18) * 18; px < x0 + w; px += 18)
+      ctx.fillRect(sx(px), sy(y + 2), Math.round(3 * SCALE), Math.round(5 * SCALE));
+  }
+
   /* ---------- the entrance hall ---------------------------------------------
      Street doors, daylight, admissions desk. The gift shop is its own room. */
   function drawFoyer(r) {
@@ -1521,19 +1667,33 @@
     ctx.fillStyle = C.voidbg;
     ctx.fillRect(0, 0, CW, CH);
 
-    /* Storey bands behind everything — dark void between floors. */
+    /* Building envelope: always upper + ground + basement so the cutaway
+       never leaves a black hole under (or over) the open floors. */
     const minF = L.minFloor !== undefined ? L.minFloor : 0;
     const maxF = L.maxFloor !== undefined ? L.maxFloor : 0;
-    for (let f = maxF; f >= minF; f--) {
+    const shellMin = L.shellMin !== undefined ? L.shellMin : Math.min(minF, -1);
+    const shellMax = L.shellMax !== undefined ? L.shellMax : Math.max(maxF, 1);
+    const totalW = L.total || VIEW_W;
+
+    for (let f = shellMax; f >= shellMin; f--) {
       const by = V.floorBase(f);
-      ctx.fillStyle = f === 0 ? "#0a0806" : f > 0 ? "#0c0a07" : "#08060a";
+      ctx.fillStyle = f === 0 ? "#0c0a07" : f > 0 ? "#0e0c08" : "#0a0806";
       ctx.fillRect(0, sy(by), CW, Math.round(FLOOR_PITCH * SCALE));
     }
+
+    /* Storey shells first (behind open rooms). Locked floors get construction
+       clutter; open floors still get structure so gaps aren't black. */
+    drawStoreyShell(1, totalW, "upper", !!(L.lockedUpper || maxF < 1));
+    drawStoreyShell(-1, totalW, "basement", !!(L.lockedBasement || minF > -1));
+
+    /* Structural slabs between every storey of the envelope. */
+    for (let f = shellMax; f > shellMin; f--)
+      drawStoreySlab(f);
 
     /* Rooms grouped by floor so doorways only join same-floor neighbours. */
     const byFloor = {};
     for (const r of L.rooms) {
-      const f = r.floor || 0;
+      const f = r.floor != null ? r.floor : 0;
       (byFloor[f] = byFloor[f] || []).push(r);
     }
     for (const f of Object.keys(byFloor)) {
@@ -1543,7 +1703,7 @@
         if (i < list.length - 1) {
           const a = list[i], b = list[i + 1];
           if (Math.abs((a.x + a.width) - b.x) < (V.DOOR || 58) + 8) {
-            activeFloor = a.floor || 0;
+            activeFloor = a.floor != null ? a.floor : 0;
             roomLocal = true;
             drawDoorway(a.x + a.width);
             roomLocal = false;
@@ -1610,19 +1770,21 @@
     ctx.fillRect(0, 0, CW, CH);
 
     /* Floor label in corner — which storey is under the camera centre. */
-    if ((L.floors || 1) > 1) {
+    if (shellMax > shellMin) {
       const midY = camY + VIEW_H * 0.45;
       let fl = 0, best = 1e9;
-      for (let f = minF; f <= maxF; f++) {
+      for (let f = shellMin; f <= shellMax; f++) {
         const d = Math.abs(midY - (V.floorBase(f) + FLOOR_Y * 0.5));
         if (d < best) { best = d; fl = f; }
       }
-      const label = V.floorLabel ? V.floorLabel(fl) : ("Floor " + fl);
+      const open = L.rooms.some((r) => (r.floor != null ? r.floor : 0) === fl);
+      let label = V.floorLabel ? V.floorLabel(fl) : ("Floor " + fl);
+      if (!open) label += " · sealed";
       ctx.font = "600 11px " + FONT_UI;
       const tw = Math.ceil(ctx.measureText(label).width) + 16;
       ctx.fillStyle = "#0c0a08cc";
       ctx.fillRect(10, CH - 28, tw, 18);
-      ctx.fillStyle = "#c79a42";
+      ctx.fillStyle = open ? "#c79a42" : "#8a7a5a";
       ctx.fillText(label, 18, CH - 15);
     }
 

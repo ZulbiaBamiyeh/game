@@ -353,10 +353,15 @@
     }
 
     if (!rooms.length) {
+      const shellMax = 1, shellMin = -1;
       return {
         rooms: [], exhibits: [], benches: [], stairs: [],
-        total: VIEW_FALLBACK, totalH: H, floors: 1,
-        minFloor: 0, maxFloor: 0, yMin: 0, yMax: H,
+        total: VIEW_FALLBACK, totalH: floorBase(shellMin) + H - floorBase(shellMax),
+        floors: 1,
+        minFloor: 0, maxFloor: 0,
+        shellMin, shellMax,
+        lockedUpper: true, lockedBasement: true,
+        yMin: floorBase(shellMax), yMax: floorBase(shellMin) + H,
         H, FLOOR_Y, FLOOR_PITCH,
       };
     }
@@ -379,15 +384,23 @@
         benches.push(b);
       }
     }
-    /* World Y: upper floors negative (above), basement positive (below). */
-    const yMin = floorBase(maxFloor);
-    const yMax = floorBase(minFloor) + H;
+    /* Always reserve a three-storey cutaway (upper / ground / basement) so the
+       museum never sits in a black void. Locked floors are drawn as sealed
+       shells until the matching upgrade opens them. */
+    const shellMax = Math.max(maxFloor, 1);
+    const shellMin = Math.min(minFloor, -1);
+    const yMin = floorBase(shellMax);
+    const yMax = floorBase(shellMin) + H;
     return {
       rooms, exhibits, benches, stairs,
       total: maxX,
       totalH: yMax - yMin,
       floors: maxFloor - minFloor + 1,
-      minFloor, maxFloor, yMin, yMax,
+      minFloor, maxFloor,
+      shellMin, shellMax,
+      lockedUpper: maxFloor < 1,
+      lockedBasement: minFloor > -1,
+      yMin, yMax,
       H, FLOOR_Y, FLOOR_PITCH,
     };
   }

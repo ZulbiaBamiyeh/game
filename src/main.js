@@ -392,30 +392,39 @@
     $("gal-room").textContent = here ? here.era.name : "—";
     $("gal-period").textContent = here && here.era.period ? here.era.period : "";
 
-    /* Floor switcher: upper (top of list) → ground → basement */
+    /* Floor switcher: always the building envelope (upper → ground → basement).
+       Sealed storeys stay clickable so you can peek at the unopened shell. */
     const floorsEl = $("gal-floors");
     if (floorsEl) {
-      const floorSet = new Set(rooms.map((r) => r.floor || 0));
-      const floorList = [...floorSet].sort((a, b) => b - a); /* upper first */
-      const sigF = floorList.join(",");
+      const L = S7.visitors.getLayout(S);
+      const openFloors = new Set(rooms.map((r) => r.floor != null ? r.floor : 0));
+      const shellMin = L.shellMin !== undefined ? L.shellMin : Math.min(0, ...openFloors);
+      const shellMax = L.shellMax !== undefined ? L.shellMax : Math.max(0, ...openFloors);
+      const floorList = [];
+      for (let f = shellMax; f >= shellMin; f--) floorList.push(f);
+      const sigF = floorList.join(",") + ":" + [...openFloors].join(",");
       if (floorsEl.dataset.sig !== sigF) {
         floorsEl.dataset.sig = sigF;
         floorsEl.innerHTML = "";
         if (floorList.length > 1) {
           for (const f of floorList) {
+            const open = openFloors.has(f);
             const b = document.createElement("button");
             b.type = "button";
-            b.className = "galfloor";
+            b.className = "galfloor" + (open ? "" : " sealed");
             b.dataset.floor = String(f);
-            b.textContent = S7.visitors.floorLabel
+            let name = S7.visitors.floorLabel
               ? S7.visitors.floorLabel(f).replace(/ floor$/i, "")
               : (f > 0 ? "Upper" : f < 0 ? "Basement" : "Ground");
+            if (!open) name = name + " · sealed";
+            b.textContent = name;
+            b.title = open ? name : "Not open yet — look around the shell";
             b.addEventListener("click", () => S7.galleryView.goToFloor(f));
             floorsEl.appendChild(b);
           }
         }
       }
-      const hereF = here ? (here.floor || 0) : 0;
+      const hereF = here ? (here.floor != null ? here.floor : 0) : 0;
       floorsEl.querySelectorAll(".galfloor").forEach((b) => {
         b.classList.toggle("on", parseInt(b.dataset.floor, 10) === hereF);
       });

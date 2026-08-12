@@ -283,6 +283,8 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 }
 .galfloor:hover{border-color:var(--ochre-2);color:var(--bone)}
 .galfloor.on{border-color:var(--ochre);color:var(--ochre);background:#2b2213}
+.galfloor.sealed{color:var(--ink-3);border-style:dashed;opacity:.85}
+.galfloor.sealed.on{border-color:#6a5a38;color:#a89870;background:#1a160e}
 .galhint{
   font-family:var(--prose);font-size:11px;color:var(--ink-3);letter-spacing:.02em;
 }

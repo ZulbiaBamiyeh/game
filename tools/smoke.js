@@ -201,6 +201,11 @@ function serve() {
       return "no basement gallery room";
     if (!(S7.visitors.floorBase(-1) > S7.visitors.floorBase(0)))
       return "basement not below ground";
+    /* Building envelope always reserves upper + basement so no black void. */
+    if (L2.shellMin === undefined || L2.shellMax === undefined)
+      return "missing shell envelope";
+    if (L2.shellMin > -1 || L2.shellMax < 1) return "shell too small";
+    if (!(L2.yMin < 0 && L2.yMax > L2.H)) return "envelope y range wrong";
     const basEx = L2.exhibits.filter((e) => e.floor === -1);
     if (!basEx.length) return "no basement exhibits";
     /* Case furniture must sit under the ceiling, not stretch from the roof. */
