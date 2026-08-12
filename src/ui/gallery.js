@@ -1007,14 +1007,9 @@
   }
 
   /* ---------- labels & HUD text (crisp, unscaled) -------------------------------
-     Accession plates live with the exhibit in the depth sort, not in the final
-     overlay — otherwise a visitor walking past a plinth gets the item number
-     stamped across their chest. Speech bubbles and the selected wall card stay
-     in the overlay because those are UI, not furniture.
-
-     Type faces: a small UI stack for signs and cards (readable at 11–13px), mono
-     only for tiny accession numbers. Soft dark underlays keep ochre text
-     legible on the gallery wall. */
+     We do not stamp accession numbers under every piece — they clutter the
+     floor and sit on people. Click a work for the caption; "Wall labels"
+     upgrade adds a short title plate under each mount (name only). */
 
   const FONT_UI = 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
   const FONT_MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
@@ -1029,56 +1024,24 @@
   }
 
   function drawLabel(e) {
+    const labels = fac ? fac.labels : 0;
+    /* No under-piece chrome until the labels upgrade is bought. */
+    if (labels <= 0) return;
     const b = exhibitBox(e);
     const x = sx(e.x);
-    /* Wall plates hang just under the frame; floor pieces get a plate on the
-       skirting in front of the mount — both still behind the walk band. */
     const y = e.mount === "wall" ? sy(b.y + b.h) + 14 : sy((b.base || 0) + FLOOR_Y + 7);
     if (x < -80 || x > CW + 80) return;
-    const labels = fac ? fac.labels : 0;
+    const title = e.a.name.length > 22 ? e.a.name.slice(0, 20) + "…" : e.a.name;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    if (labels <= 0) {
-      /* Handwritten scrap until proper labels are written. */
-      const tw = 28;
-      ctx.fillStyle = "#0a0806cc";
-      ctx.fillRect(x - tw / 2, y - 7, tw, 14);
-      ctx.strokeStyle = "#3a3426";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x - tw / 2 + 0.5, y - 6.5, tw - 1, 13);
-      ctx.font = "10px " + FONT_MONO;
-      fillTextShadow(e.a.no, x, y + 1, "#a99f88", "#00000088");
-    } else if (labels < 3) {
-      const tw = 32;
-      ctx.fillStyle = "#12100aee";
-      ctx.fillRect(x - tw / 2, y - 8, tw, 16);
-      ctx.fillStyle = "#8a6a2c";
-      ctx.fillRect(x - tw / 2, y - 8, tw, 1);
-      ctx.font = "10px " + FONT_MONO;
-      fillTextShadow(e.a.no, x, y + 1, "#d8cfb6", null);
-    } else {
-      /* Proper printed label: accession plus a short title. */
-      const title = e.a.name.length > 20 ? e.a.name.slice(0, 18) + "…" : e.a.name;
-      ctx.font = "600 11px " + FONT_UI;
-      const titleW = ctx.measureText(title).width;
-      ctx.font = "10px " + FONT_MONO;
-      const noW = ctx.measureText(e.a.no).width;
-      const tw = Math.ceil(Math.max(titleW, noW) + 14);
-      const th = labels >= 6 ? 28 : 16;
-      ctx.fillStyle = "#0f0d08f2";
-      ctx.fillRect(x - tw / 2, y - th / 2, tw, th);
-      ctx.fillStyle = "#c79a42";
-      ctx.fillRect(x - tw / 2, y - th / 2, tw, 2);
-      if (labels >= 6) {
-        ctx.font = "600 11px " + FONT_UI;
-        fillTextShadow(title, x, y - 4, "#f0e8d4", null);
-        ctx.font = "10px " + FONT_MONO;
-        fillTextShadow(e.a.no, x, y + 8, "#c4b896", null);
-      } else {
-        ctx.font = "10px " + FONT_MONO;
-        fillTextShadow(e.a.no, x, y + 1, "#e8e1d1", null);
-      }
-    }
+    ctx.font = "600 11px " + FONT_UI;
+    const tw = Math.ceil(ctx.measureText(title).width + 14);
+    const th = 16;
+    ctx.fillStyle = "#0f0d08f0";
+    ctx.fillRect(x - tw / 2, y - th / 2, tw, th);
+    ctx.fillStyle = "#c79a42";
+    ctx.fillRect(x - tw / 2, y - th / 2, tw, 1);
+    fillTextShadow(title, x, y + 1, "#e8e1d1", null);
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
   }
