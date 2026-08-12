@@ -683,9 +683,13 @@
         for (let j = i + 1; j < viewing.length; j++) {
           const a = viewing[i], b = viewing[j];
           if (Math.abs(a.x - b.x) > 34) continue;
-          const lines = a.target && a.target === b.target && rng.chance(0.45)
-            ? S7.remarks.pair(rng)
-            : [S7.remarks.ambient(rng, a.type), S7.remarks.ambient(rng, b.type)];
+          const samePiece = a.target && a.target === b.target;
+          const lines = samePiece && rng.chance(0.62)
+            ? S7.remarks.pair(rng, a.target.a)
+            : samePiece && rng.chance(0.5)
+              ? [S7.remarks.forExhibit(rng, a.target.a, a.type),
+                 S7.remarks.forExhibit(rng, b.target.a, b.type)]
+              : [S7.remarks.ambient(rng, a.type), S7.remarks.ambient(rng, b.type)];
           say(state, a, lines[0], 3.6);
           b.pendingReply = { text: lines[1], delay: 1.5 };
           a.chatCooldown = rng.range(12, 30);
