@@ -25,16 +25,17 @@
   const FLOOR_Y = 112;           /* where the back wall meets the floor (local) */
   const WALK_FAR = 118;          /* back of the walkable band, nearest the wall */
   const WALK_NEAR = 152;         /* front of it */
-  const ROOM_PAD = 30;
-  const MIN_ROOM = 220;
-  const DOOR = 58;               /* the arch between two rooms */
+  const ROOM_PAD = 52;           /* air from doorway to first mount */
+  const MIN_ROOM = 300;          /* galleries need room to breathe */
+  const EXHIBIT_GAP = 36;        /* clear wall between pieces */
+  const DOOR = 64;               /* the arch between two rooms */
   const BENCH_Y = 146;           /* where a bench stands on the floor (local) */
   const MAX_AGENTS = 56;
   const STAIRS_W = 88;
 
   /* The entrance hall, which every museum has and which is where the money
      actually changes hands. */
-  const FOYER_W = 250;
+  const FOYER_W = 280;
   /* People are drawn 27 logical pixels across, so "not touching" is about
      thirteen apart and a queue needs twenty between one pair of shoulders and
      the next. Both were tuned by looking at the entrance hall, not by maths. */
@@ -103,16 +104,23 @@
       if (meta.theme === "dino" && a.kind === "object" &&
           (a.objectType === "dinoBone" || a.objectType === "trackSlab" || a.objectType === "eggFossil"))
         mount = "plinth";
-      exhibits.push({ a, x: cx + phys.w / 2, w: phys.w, h: phys.h, mount, index: i, phys });
-      cx += phys.w;
+      /* Minimum bay so small finds still get breathing room on the wall. */
+      const bay = Math.max(phys.w + 8, 40);
+      exhibits.push({ a, x: cx + bay / 2, w: phys.w, h: phys.h, mount, index: i, phys });
+      cx += bay + EXHIBIT_GAP;
     }
     const pad = roomPad || 0;
-    const themePad = meta.theme ? 40 : 0;
-    const width = Math.max(MIN_ROOM + pad + themePad, cx - x + ROOM_PAD + pad + themePad);
+    const themePad = meta.theme ? 56 : 24;
+    /* Trailing pad after the last gap we already added. */
+    const contentW = exhibits.length
+      ? (cx - x - EXHIBIT_GAP + ROOM_PAD)
+      : MIN_ROOM;
+    const width = Math.max(MIN_ROOM + pad + themePad, contentW + pad + themePad);
     const benches = [];
-    const nBench = Math.max(1, Math.floor(width / 280));
+    /* Benches sit forward of the wall mounts, spaced along the room. */
+    const nBench = Math.max(1, Math.floor(width / 220));
     for (let b = 0; b < nBench; b++) {
-      const bx = x + width * ((b + 0.5) / nBench) + (b % 2 ? 18 : -18);
+      const bx = x + width * ((b + 0.5) / nBench) + (b % 2 ? 14 : -14);
       benches.push({
         x: bx, y: BENCH_Y,
         seats: [bx - 13, bx, bx + 13].map((sxx) => ({ x: sxx, taken: null })),
@@ -124,8 +132,25 @@
       period: meta.period,
       short: meta.short || meta.name,
     };
+    /* Architectural spice — not accessioned, not clickable. Seeded from room x
+       so the same room always has the same urns and columns. */
+    const decor = [];
+    decor.push({ kind: "column", x: x + 16 });
+    decor.push({ kind: "column", x: x + width - 16 });
+    if (width > 340) {
+      decor.push({ kind: "urn", x: x + 70 });
+      decor.push({ kind: "urn", x: x + width - 70 });
+    }
+    if (width > 420) {
+      decor.push({ kind: "niche", x: x + width * 0.28 });
+      decor.push({ kind: "bustPed", x: x + width * 0.72 });
+    }
+    if (width > 500) decor.push({ kind: "console", x: x + width * 0.5 });
+    decor.push({ kind: "plant", x: x + width - 28 });
+    if (width > 280) decor.push({ kind: "plant", x: x + 36 });
+
     rooms.push({
-      era, x, width, floor: floor || 0, exhibits, items, benches,
+      era, x, width, floor: floor || 0, exhibits, items, benches, decor,
       theme: meta.theme || null,
       featured: !!meta.theme,
     });
@@ -1262,7 +1287,7 @@
   S7.visitors = {
     create, step, layout, getLayout, invalidate, reseat, place, roomAt, feetY, scaleOf,
     floorBase, worldY, stairsOnFloor, localFeetY,
-    H, FLOOR_Y, FLOOR_PITCH, WALK_NEAR, WALK_FAR, ROOM_PAD, DOOR, BENCH_Y, MAX_AGENTS,
+    H, FLOOR_Y, FLOOR_PITCH, WALK_NEAR, WALK_FAR, ROOM_PAD, EXHIBIT_GAP, DOOR, BENCH_Y, MAX_AGENTS,
     FOYER_W, DOOR_X, DESK_X, DESK_W, STAIRS_W,
   };
 })(window.S7 = window.S7 || {});

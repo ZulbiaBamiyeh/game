@@ -628,7 +628,8 @@
 
     h = Math.max(MIN_H, Math.min(MAX_H, Math.round(h)));
     const monumental = h >= 58;
-    const w = Math.max(30, Math.round(h * (a.kind === "painting" ? 1.18 : 0.95)) + 22);
+    /* Wall bay width — generous air so mounts never sit shoulder-to-shoulder. */
+    const w = Math.max(36, Math.round(h * (a.kind === "painting" ? 1.22 : 1.0)) + 28);
     return (a._phys = { h, w, monumental });
   }
 

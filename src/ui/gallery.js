@@ -300,7 +300,7 @@
     }
     /* board rows, squeezed together toward the back wall */
     const rows = [];
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.45;
     for (let i = 0; i < 8; i++) {
       const y = FLOOR_Y + 2 + i * i * 1.35;
       if (y > V.H) break;
@@ -308,27 +308,25 @@
       rect(x0, y, w, 1, C.floorLine);
     }
     ctx.globalAlpha = 1;
-    /* plank ends only on the two nearest boards, where you would actually
-       pick them out */
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = 0.35;
     for (let i = Math.max(0, rows.length - 3); i < rows.length - 1; i++) {
       const y = rows[i], next = rows[i + 1];
-      const pitch = 20 + i * 8;
+      const pitch = 22 + i * 8;
       for (let px = Math.floor((x0 + (i % 2) * pitch / 2) / pitch) * pitch; px < x0 + w; px += pitch) {
         if (px < x0) continue;
         rect(px, y + 1, 1, Math.max(1, next - y - 1), C.floorLine);
       }
     }
     ctx.globalAlpha = 1;
-    /* a soft sheen down the middle of the floor, as if from the lights */
+    /* Warm sheen from the lights */
     const g = ctx.createLinearGradient(0, syR(FLOOR_Y), 0, syR(V.H));
-    g.addColorStop(0, "rgba(255,226,166,0.07)");
+    g.addColorStop(0, "rgba(255,226,166,0.09)");
     g.addColorStop(1, "rgba(255,226,166,0)");
     ctx.fillStyle = g;
     ctx.fillRect(sx(x0), syR(FLOOR_Y), Math.round(w * SCALE), Math.round((V.H - FLOOR_Y) * SCALE));
   }
 
-  /* Wall: a vertical wash, panel joins, and the picture rail. */
+  /* Wall: wash, panel joins, picture rail, and a proper dado for height. */
   function drawWall(x0, w, theme) {
     const top = theme ? theme.hi : C.wallTop;
     const hi = theme ? theme.hi : C.wallHi;
@@ -339,15 +337,86 @@
       const shade = t < 0.16 ? top : t < 0.46 ? hi : t < 0.82 ? lo : shadeLo;
       rect(x0, y, w, 1, shade);
     }
-    ctx.globalAlpha = 0.35;
-    for (let px = Math.ceil(x0 / 58) * 58; px < x0 + w; px += 58)
-      rect(px, WALL_TOP, 1, FLOOR_Y - WALL_TOP - 5, C.wallSeam);
+    /* Soft vertical panels */
+    ctx.globalAlpha = 0.22;
+    for (let px = Math.ceil((x0 + 24) / 72) * 72; px < x0 + w - 20; px += 72)
+      rect(px, WALL_TOP + 10, 1, FLOOR_Y - WALL_TOP - 28, C.wallSeam);
     ctx.globalAlpha = 1;
-    rect(x0, RAIL_Y, w, 1, theme && theme.accent ? theme.accent : C.rail);
-    rect(x0, RAIL_Y + 1, w, 1, "#00000038");
-    rect(x0, FLOOR_Y - 5, w, 5, C.skirt);
-    rect(x0, FLOOR_Y - 5, w, 1, "#75643f");
+    /* Cornice under the cove */
+    rect(x0, WALL_TOP + 2, w, 2, "#00000022");
+    rect(x0, WALL_TOP + 4, w, 1, theme && theme.accent ? theme.accent + "55" : "#8a6a2c33");
+    /* Picture rail */
+    rect(x0, RAIL_Y, w, 2, theme && theme.accent ? theme.accent : C.rail);
+    rect(x0, RAIL_Y + 2, w, 1, "#00000040");
+    /* Dado / chair rail — gives the wall a classical middle */
+    const dado = 78;
+    rect(x0, dado, w, 3, "#4a3f28");
+    rect(x0, dado, w, 1, "#6b5a3a");
+    rect(x0, dado + 3, w, 1, "#00000030");
+    /* Lower wall slightly darker (wainscot) */
+    ctx.globalAlpha = 0.12;
+    rect(x0, dado + 4, w, FLOOR_Y - dado - 9, "#000000");
+    ctx.globalAlpha = 1;
+    /* Skirting */
+    rect(x0, FLOOR_Y - 6, w, 6, C.skirt);
+    rect(x0, FLOOR_Y - 6, w, 1, "#8a7350");
     rect(x0, FLOOR_Y - 1, w, 1, "#2a2317");
+  }
+
+  /* Runner carpet down the centre of a gallery. */
+  function drawCarpet(x0, w) {
+    if (w < 200) return;
+    const cx = x0 + w / 2;
+    const cw = Math.min(48, w * 0.22);
+    rect(cx - cw / 2, FLOOR_Y + 4, cw, V.H - FLOOR_Y - 10, "#3a2820");
+    rect(cx - cw / 2, FLOOR_Y + 4, cw, 1, "#5a4030");
+    ctx.globalAlpha = 0.35;
+    for (let y = FLOOR_Y + 10; y < V.H - 12; y += 8)
+      rect(cx - cw / 2 + 3, y, cw - 6, 1, "#6a4a30");
+    ctx.globalAlpha = 1;
+    rect(cx - cw / 2, FLOOR_Y + 4, 2, V.H - FLOOR_Y - 10, "#8a6a2c55");
+    rect(cx + cw / 2 - 2, FLOOR_Y + 4, 2, V.H - FLOOR_Y - 10, "#8a6a2c55");
+  }
+
+  /* Non-accession décor: columns, urns, niches — architecture, not inventory. */
+  function drawDecor(d, room) {
+    const x = d.x;
+    if (x < camX - 30 || x > camX + VIEW_W + 30) return;
+    if (d.kind === "column") {
+      rect(x - 5, WALL_TOP + 6, 10, FLOOR_Y - WALL_TOP - 10, "#4a4234");
+      rect(x - 6, WALL_TOP + 4, 12, 4, "#6b5a3a");
+      rect(x - 7, FLOOR_Y - 8, 14, 6, "#5a4e35");
+      rect(x - 4, WALL_TOP + 10, 2, FLOOR_Y - WALL_TOP - 20, "#6a5c42");
+      rect(x + 2, WALL_TOP + 10, 1, FLOOR_Y - WALL_TOP - 20, "#2a2418");
+    } else if (d.kind === "urn") {
+      rect(x - 6, 100, 12, 4, "#5a4e35");
+      rect(x - 5, 88, 10, 14, "#6b5a8a");
+      rect(x - 4, 86, 8, 3, "#8a7aaa");
+      rect(x - 3, 92, 6, 6, "#4a3a6a");
+      rect(x - 7, 104, 14, 3, "#4a3f28");
+      rect(x - 2, 108, 4, 6, "#3a3426");
+    } else if (d.kind === "niche") {
+      rect(x - 14, 44, 28, 36, "#1a160d");
+      rect(x - 14, 44, 28, 1, "#6b5a3a");
+      rect(x - 12, 46, 24, 32, "#2a2418");
+      rect(x - 5, 58, 10, 16, "#5a4e35");
+      rect(x - 4, 56, 8, 3, "#c79a42");
+    } else if (d.kind === "bustPed") {
+      rect(x - 8, 100, 16, 14, "#5a5048");
+      rect(x - 9, 98, 18, 3, "#7a7268");
+      rect(x - 5, 78, 10, 20, "#8a8278");
+      rect(x - 4, 74, 8, 6, "#a09a90");
+      rect(x - 3, 72, 6, 3, "#6a6458");
+    } else if (d.kind === "console") {
+      rect(x - 18, 108, 36, 4, "#5a4a30");
+      rect(x - 16, 112, 3, 10, "#4a3f28");
+      rect(x + 13, 112, 3, 10, "#4a3f28");
+      rect(x - 10, 100, 8, 8, "#6b5a8a");
+      rect(x + 2, 102, 6, 6, "#c79a42");
+      rect(x + 4, 98, 4, 4, "#e8e1d1");
+    } else if (d.kind === "plant") {
+      drawPlant(x);
+    }
   }
 
   /* Coved ceiling with recessed downlights. Spacing tightens as lighting is
@@ -423,8 +492,10 @@
     if (r.deepgal) { drawDeepGallery(r); roomLocal = false; return; }
     if (r.wing) { drawWingRoom(r); roomLocal = false; return; }
 
+    /* Gallery rooms: carpet, architecture, then wall board. */
+    drawCarpet(x0, r.width);
+    if (r.decor) for (const d of r.decor) drawDecor(d, r);
     if (roomHasBoard(r)) drawInfoBoard(r);
-    if (r.width > 260) drawPlant(x1 - 22);
 
     if (fac && fac.staff > 0 && r.exhibits.length) drawGuide(r);
     roomLocal = false;
