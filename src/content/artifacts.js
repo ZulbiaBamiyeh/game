@@ -17,167 +17,167 @@
      bench buys you. */
 
   const CONDITIONS = [
-    { id: "frag", n: "Fragmentary", mult: 0.55, w: 26, note: "Substantially incomplete." },
-    { id: "poor", n: "Poor",        mult: 0.75, w: 24, note: "Stable but much reduced." },
-    { id: "part", n: "Partial",     mult: 1.00, w: 22, note: "Recognisable, with losses." },
-    { id: "sound", n: "Sound",      mult: 1.35, w: 18, note: "Complete or near enough." },
-    { id: "fine", n: "Fine",        mult: 1.85, w: 8,  note: "Better than the context deserves." },
-    { id: "excep", n: "Exceptional", mult: 2.60, w: 2, note: "One of the best of its kind anywhere." },
+    { id: "frag", n: "In pieces",   mult: 0.55, w: 26, note: "Only parts of it are left." },
+    { id: "poor", n: "Worn",        mult: 0.75, w: 24, note: "Holds together, but a lot is missing." },
+    { id: "part", n: "Incomplete",  mult: 1.00, w: 22, note: "You can still tell what it is." },
+    { id: "sound", n: "Good",       mult: 1.35, w: 18, note: "Whole, or near enough." },
+    { id: "fine", n: "Excellent",   mult: 1.85, w: 8,  note: "Surprisingly well kept for where it was found." },
+    { id: "excep", n: "Exceptional", mult: 2.60, w: 2, note: "One of the best of its kind you are likely to see." },
   ];
 
   const RARITIES = [
     { id: "common",   n: "Common",      mult: 1.00, w: 100, css: "r-common" },
     { id: "uncommon", n: "Uncommon",    mult: 1.45, w: 44,  css: "r-uncommon" },
     { id: "rare",     n: "Rare",        mult: 2.30, w: 16,  css: "r-rare" },
-    { id: "signif",   n: "Significant", mult: 3.80, w: 5,   css: "r-signif" },
-    { id: "unique",   n: "Unique",      mult: 6.50, w: 1,   css: "r-unique" },
+    { id: "signif",   n: "Important",   mult: 3.80, w: 5,   css: "r-signif" },
+    { id: "unique",   n: "One of a kind", mult: 6.50, w: 1, css: "r-unique" },
   ];
 
   /* ---------- vocabulary --------------------------------------------------
-     Object nouns are per-type, because "vessel" covers an amphora and a
-     cooking pot and the label should not say "vessel" every time. */
+     Plain names a visitor could read off a label. Condition is shown next to
+     the name, so it does not need to be baked into the title. */
 
   const OBJECT_NOUNS = {
-    cap: ["Bottle cap, crown type", "Crown closure", "Cap, crimped"],
-    console: ["Handheld console", "Electronic toy, portable", "Games device"],
-    tag: ["Identification disc", "Collar tag, stamped", "Tag, punched"],
-    key: ["Key, domestic", "Key, warded", "Key, single"],
-    bottle: ["Bottle, glass", "Vessel, glass, patinated", "Phial"],
-    coin: ["Coin, struck", "Issue, struck", "Currency piece"],
-    needle: ["Needle, eyed", "Pin, shafted", "Awl"],
-    nail: ["Nail, hand-forged", "Spike, wrought", "Fastener, square section"],
-    buckle: ["Buckle, cast", "Belt fitting", "Buckle with tongue"],
-    torc: ["Neck ring", "Torc, twisted", "Collar, penannular"],
-    mirror: ["Mirror, polished", "Speculum", "Mirror with decorated reverse"],
-    blade: ["Blade, tapering", "Knife", "Blade fragment, midribbed"],
-    handaxe: ["Handaxe, bifacial", "Core tool", "Biface"],
-    spearpoint: ["Point, pressure-flaked", "Spear point", "Projectile point"],
-    sherd: ["Sherd, painted", "Pottery fragment", "Vessel fragment, banded"],
-    vessel: ["Vessel, complete", "Jar, footed", "Storage vessel"],
-    lamp: ["Lamp, spouted", "Lamp, fuelled", "Vessel lamp"],
-    bonefrag: ["Bone, long, fragment", "Skeletal fragment", "Bone, worked?"],
-    bead: ["Beads, strung", "Bead string", "Ornament, drilled"],
-    figurine: ["Figure, seated", "Figurine, hands raised", "Anthropomorphic figure"],
-    tablet: ["Tablet, inscribed", "Inscribed slab", "Text block"],
-    seal: ["Seal, carved", "Stamp seal", "Seal with device"],
-    blockStone: ["Block, dressed", "Marker, worked stone", "Ashlar fragment"],
-    ledger: ["Ledger, partial", "Bound account book", "Register, water-damaged"],
-    watch: ["Wristwatch", "Watch, mechanical"],
-    marker: ["Survey marker", "Datum plate", "Benchmark, capped"],
-    bell: ["Bell, cast", "Clapper bell", "Bell, small"],
-    astrolabe: ["Astrolabe, planispheric", "Instrument, engraved", "Astrolabe plate"],
+    cap: ["Bottle cap", "Crown bottle top", "Metal bottle cap"],
+    console: ["Handheld games console", "Pocket games device", "Electronic toy"],
+    tag: ["ID tag", "Stamped metal tag", "Collar tag"],
+    key: ["House key", "Old iron key", "Door key"],
+    bottle: ["Glass bottle", "Small glass flask", "Clear glass bottle"],
+    coin: ["Coin", "Struck coin", "Small coin"],
+    needle: ["Sewing needle", "Bone needle", "Awl"],
+    nail: ["Hand-forged nail", "Iron nail", "Square nail"],
+    buckle: ["Belt buckle", "Cast buckle", "Buckle with pin"],
+    torc: ["Neck ring", "Twisted metal collar", "Open neck ring"],
+    mirror: ["Hand mirror", "Polished metal mirror", "Decorated mirror"],
+    blade: ["Knife blade", "Small knife", "Tapered blade"],
+    handaxe: ["Stone handaxe", "Flaked stone tool", "Bifacial handaxe"],
+    spearpoint: ["Spear point", "Flaked stone point", "Projectile point"],
+    sherd: ["Painted potsherd", "Broken pottery", "Pottery fragment"],
+    vessel: ["Storage jar", "Clay pot", "Footed jar"],
+    lamp: ["Oil lamp", "Spouted lamp", "Clay lamp"],
+    bonefrag: ["Worked bone", "Long bone fragment", "Bone piece"],
+    bead: ["String of beads", "Drilled beads", "Bead necklace"],
+    figurine: ["Small figurine", "Seated figure", "Clay figure"],
+    tablet: ["Inscribed tablet", "Clay tablet", "Writing tablet"],
+    seal: ["Carved seal", "Stamp seal", "Seal stone"],
+    blockStone: ["Dressed stone block", "Worked stone", "Cut stone marker"],
+    ledger: ["Account book", "Bound ledger", "Water-damaged register"],
+    watch: ["Wristwatch", "Mechanical watch"],
+    marker: ["Survey marker", "Datum plate", "Benchmark plate"],
+    bell: ["Small bell", "Cast bell", "Hand bell"],
+    astrolabe: ["Astrolabe", "Engraved instrument", "Brass astrolabe"],
   };
 
   /* Fallback so a missing entry never breaks a run. */
-  const nounFor = (type) => OBJECT_NOUNS[type] || ["Object, unidentified"];
+  const nounFor = (type) => OBJECT_NOUNS[type] || ["Unidentified object"];
 
+  /* Light touch only — most of the time the bare noun is enough. */
   const QUALIFIERS = {
-    frag: [", fragmentary", ", in pieces", ", one corner only"],
-    poor: [", much reduced", ", surface lost", ", heavily degraded"],
-    part: [", with losses", ", partial", ", incomplete"],
-    sound: ["", "", ", complete"],
-    fine: [", well preserved", ", fine condition", ""],
-    excep: [", exceptional", ", complete and unworn", ""],
+    frag: ["", " (fragment)", " (broken)"],
+    poor: ["", " (worn)", ""],
+    part: ["", "", " (incomplete)"],
+    sound: ["", "", ""],
+    fine: ["", "", ""],
+    excep: ["", "", ""],
   };
 
   /* ---------- field notes -------------------------------------------------
-     The voice of the survey. One line about the thing, one about the ground it
-     came out of, and — deeper down — one the writer would rather not have
-     had to put in the record. */
+     Short, plain sentences. Written the way someone would actually describe
+     a find to a colleague, not to a catalogue card. */
 
   const NOTE_KIND = {
     object: [
-      "Recorded in place before it was lifted.",
-      "Come out of undisturbed ground, in one piece.",
-      "Recovered along with a few others of the same kind.",
-      "Shows the ordinary wear of having been used, nothing more.",
-      "No maker's mark, but the work is not in question.",
-      "A common type. There are others like it in the collection.",
+      "Found in place and lifted carefully.",
+      "Came out of clean ground in one piece.",
+      "One of several similar finds from this level.",
+      "Shows the ordinary wear of having been used.",
+      "No maker's mark, but clearly made with care.",
+      "A common type — there are others like it here.",
     ],
     painting: [
-      "Lifted on a plaster backing. The pigment is stable and has not been consolidated.",
-      "The ground layer is intact beneath the losses, so the image can be read even where the paint has gone.",
-      "Pigment analysis is pending. The binder appears to be organic and has not degraded as far as it should have.",
-      "The composition runs off the edge on two sides. This was cut from something larger.",
-      "There is an underdrawing visible in raking light. The finished image departs from it.",
-      "The palette is limited to four pigments, all of them locally available, all of them ground fine.",
+      "The paint is stable. The image is still easy to read.",
+      "Some paint has gone, but the picture underneath still holds together.",
+      "The colours look local, ground fine, and carefully laid on.",
+      "The picture is cut off at two edges — this was part of something larger.",
+      "You can just make out a sketch under the finished paint.",
+      "Only a few colours were used, all of them available nearby.",
     ],
     sculpture: [
-      "The breaks are old. It was already in this condition when it entered the deposit.",
-      "Traces of paint survive in the undercuts. It was not meant to be seen as bare stone.",
-      "Tool marks on the reverse are coarse. It was made to be viewed from one side only.",
-      "The proportions are canonical to within a few millimetres. There was a rule and it was followed.",
-      "Drill marks in the hair are the standard depth. Workshop production, not a single hand.",
-      "The base was never finished. It was made to be set into something.",
+      "The breaks are old. It went into the ground already like this.",
+      "A little paint still hides in the crevices — it was meant to be coloured.",
+      "The back is rough. It was only meant to be seen from the front.",
+      "The proportions are careful and regular. Someone was following a rule.",
+      "The detail is clean and even — workshop work, not a one-off.",
+      "The base was left unfinished. It was meant to sit in a socket.",
     ],
   };
 
   const NOTE_EERIE = [
     /* 0 — ordinary */
     [
-      "Nothing else to note.",
-      "An unremarkable find, in the best sense.",
-      "Fits comfortably with everything else from this level.",
+      "Nothing else of note.",
+      "An ordinary find, in the best sense.",
+      "Fits well with everything else from this depth.",
     ],
     /* 1 — a detail that will not sit still */
     [
-      "The horizon above this find is undisturbed. There is no mechanism by which it got here.",
-      "It is nine hundred kilometres from anywhere this type has been recorded before.",
-      "The layer it came out of is thirty centimetres thick and contains nothing else at all.",
-      "There is a spiral incised on the underside. Eight turns, counterclockwise. I have started counting them.",
-      "It was packed. Not buried — packed, in a void deliberately left for it.",
+      "The ground above it is undisturbed. There is no obvious way it got here.",
+      "This type is usually found hundreds of kilometres away.",
+      "The layer around it is empty — thirty centimetres of fill and nothing else.",
+      "There is a spiral scratched on the underside: eight turns, anti-clockwise.",
+      "It was not just buried. It was packed into a space left open for it.",
     ],
     /* 2 — the deposit stops being deniable */
     [
-      "Sediment above shows no intrusion of any kind. This did not fall down a shaft. It was placed and then covered.",
-      "The eight-turn spiral again, on the base, counterclockwise. That is eleven of them now.",
-      "There is no decay. At this depth and this age there is no mechanism for there to be no decay.",
-      "It was wrapped before burial, in something that has itself entirely gone, leaving the impression and nothing else.",
-      "The crew have stopped asking me what the deep material is. I take that as a bad sign rather than a good one.",
-      "Two of these were recovered within a metre, identical to tolerances I cannot measure in the field.",
+      "Nothing has cut through the ground above. It was put here, then covered.",
+      "Another eight-turn spiral on the base. That is eleven of them so far.",
+      "It should have decayed at this age and depth. It has not.",
+      "It was wrapped before burial. The wrapping is gone; the shape of it remains.",
+      "The crew have stopped asking what the deep material is. That is not a good sign.",
+      "Two of these came up within a metre of each other, almost identical.",
     ],
     /* 3 — unattributed */
     [
-      "There is no accepted context for this object. There is no unaccepted context for it either. I have left the field blank.",
-      "The workmanship is excellent and belongs to no tradition in the literature. I have checked. I have had others check.",
-      "It is not weathered. It has been in the ground for longer than the ground has been there and it is not weathered.",
-      "The figures have their hands raised over their faces. They do on all of them. The faces are not modelled underneath.",
-      "I have catalogued it as Group A on the basis that it resembles the other things I have catalogued as Group A.",
-      "The material is not in the reference collection. It is not, as far as I can determine, in any reference collection.",
+      "There is no accepted home for this object, and no rejected one either.",
+      "Beautifully made, and not like anything in the books. I have checked twice.",
+      "It has been in the ground longer than the ground has been here, and it is not weathered.",
+      "The figures cover their faces with their hands. The faces underneath are blank.",
+      "I have labelled it Group A because it looks like the other Group A things.",
+      "The material is not in our reference set, or anyone else's that I can find.",
     ],
     /* 4 — the floor */
     [
-      "The manufacture postdates the depth. Both measurements have been repeated. Neither has moved.",
-      "It is stamped with an accession number in a hand I recognise, in a format this institute adopted last year.",
-      "This is the fourth object recovered below the floor that could not have existed when it was buried.",
+      "It was made after the depth says it was buried. We measured both again.",
+      "It carries an accession number in our own handwriting, from last year's format.",
+      "This is the fourth thing from below the floor that could not have existed when it was buried.",
       "The number on the base is the next one in our sequence. We have not issued it yet.",
-      "I am recording this and I am not going to interpret it.",
+      "I am writing this down. I am not going to explain it.",
     ],
   ];
 
   const NOTE_MATERIAL = {
-    metal: ["The corrosion product is stable and has not been removed.",
-            "Sound metal survives beneath the surface layer.",
-            "Cast in one piece and finished by hand; the seam has been filed away."],
-    stone: ["The stone is not local. The nearest source is a long way from here.",
-            "Ground and polished on every face, including the ones nobody would see.",
-            "There is a natural flaw through the middle that the carver has worked around."],
-    organic: ["Survival at this depth is exceptional and I do not have an explanation for it.",
-              "The surface is porous and has taken up salts from the surrounding fill.",
-              "Cut marks near one end. Working, not butchery."],
-    ceramic: ["Evenly fired throughout, which takes a controlled kiln.",
-              "The fabric contains a temper I do not recognise.",
-              "Wheel-thrown, walls under four millimetres. Confident work."],
-    pigment: ["The binder has not been identified. It is not any of the usual ones.",
-              "Pigment sits directly on the ground layer with no size between them.",
-              "Applied wet into wet, which means it was finished in one working.",
-              "The support is sound. Nothing has been consolidated or relined."],
+    metal: ["The surface corrosion is stable and we have left it on.",
+            "Clean metal still sits under the outer layer.",
+            "Cast in one piece and finished by hand."],
+    stone: ["The stone is not from around here.",
+            "Every face is ground smooth, even the ones you would never see.",
+            "There is a natural crack the carver worked around."],
+    organic: ["It should not have survived this deep, and yet it has.",
+              "The surface is porous and has taken on salts from the fill.",
+              "Cut marks near one end look like working, not butchery."],
+    ceramic: ["Evenly fired all the way through — a careful kiln.",
+              "The clay mix has grit in it that I do not recognise.",
+              "Thrown on a wheel, with walls only a few millimetres thick."],
+    pigment: ["We have not yet identified what holds the paint together.",
+              "The paint sits straight on the ground with nothing underneath.",
+              "Painted wet-into-wet — finished in one go.",
+              "The support is sound. Nothing has needed patching."],
     synthetic: ["The plastic has kept its shape well.",
-                "Moulding seams are still visible on the casing.",
+                "Moulding seams are still visible on the case.",
                 "The colour has barely faded."],
-    other: ["In good enough condition to show as found.",
+    other: ["Good enough to show as found.",
             "Nothing unusual about the material.",
-            "A straightforward piece to catalogue."],
+            "A straightforward piece to write up."],
   };
 
   /* What a painting is actually on. "Paper" for a Roman fresco and a Song
@@ -207,37 +207,38 @@
   };
 
   const MATERIAL_LABEL = {
-    bronze: "Bronze, cast", brass: "Brass", iron: "Wrought iron", steel: "Steel",
-    silver: "Silver, struck", gold: "Gold", alum: "Aluminium alloy", rust: "Ferrous, corroded",
-    stone: "Stone, worked", granite: "Granite", basalt: "Basalt", marble: "Marble",
-    obsid: "Obsidian", chalk: "Limestone", ice: "Material undetermined",
-    bone: "Bone", leather: "Leather and paper", wood: "Timber", paper: "Paper",
-    clay: "Fired clay", sand: "Fired clay, buff", celadon: "Glazed ceramic", glass: "Glass",
-    plastic: "Moulded polymer", lcd: "Glass and polymer", timber: "Timber",
-    canvas: "Oil on canvas", panel: "Tempera on panel",
-    printpaper: "Woodblock print on paper", barkpaper: "Pigment on bark paper",
-    vellum: "Gouache and gold on vellum", silk: "Ink and colour on silk",
-    plank: "Pigment on worked timber", plaster: "Pigment on lime plaster",
-    rockface: "Pigment on detached rock", unknownpig: "Pigment, unidentified binder",
-    tile: "Glazed ceramic tile", vasefabric: "Slip on fired clay",
+    bronze: "Cast bronze", brass: "Brass", iron: "Wrought iron", steel: "Steel",
+    silver: "Silver", gold: "Gold", alum: "Aluminium", rust: "Corroded iron",
+    stone: "Worked stone", granite: "Granite", basalt: "Basalt", marble: "Marble",
+    obsid: "Obsidian", chalk: "Limestone", ice: "Unknown material",
+    bone: "Bone", leather: "Leather and paper", wood: "Wood", paper: "Paper",
+    clay: "Fired clay", sand: "Buff clay", celadon: "Glazed ceramic", glass: "Glass",
+    plastic: "Plastic", lcd: "Glass and plastic", timber: "Wood",
+    canvas: "Oil on canvas", panel: "Paint on wood panel",
+    printpaper: "Print on paper", barkpaper: "Paint on bark paper",
+    vellum: "Paint and gold on vellum", silk: "Ink on silk",
+    plank: "Paint on wood", plaster: "Paint on plaster",
+    rockface: "Paint on rock", unknownpig: "Paint, binder unknown",
+    tile: "Glazed tile", vasefabric: "Painted pottery",
   };
 
   /* ---------- interpretation ---------------------------------------------
      Three readings, one right. Filing early is worth more, and being wrong is
-     recorded either way. */
+     recorded either way. Plain wording — these are choices the player reads
+     mid-dig, not catalogue entries. */
 
   const READINGS = {
     object: [
-      ["Domestic, in everyday use", "Ritual deposit, placed deliberately", "Trade good, in transit",
-       "Manufacturing waste, discarded", "Personal ornament", "Structural fitting"],
+      ["Used every day at home", "Left as an offering on purpose", "A trade good, still moving",
+       "Workshop scrap, thrown away", "Personal ornament", "Part of a building or fitting"],
     ],
     painting: [
-      ["Devotional image, for display", "Funerary, for a closed chamber", "Decorative scheme, domestic",
-       "Instructional or record-keeping", "Workshop trial piece", "Commissioned portrait"],
+      ["Made for worship and display", "Made for a tomb or closed room", "Decoration for a house",
+       "A teaching or record picture", "A workshop practice piece", "A commissioned portrait"],
     ],
     sculpture: [
-      ["Cult image, publicly sited", "Grave good, interred with a body", "Architectural element",
-       "Votive offering, mass produced", "Portrait of an individual", "Apotropaic figure"],
+      ["A public religious image", "Buried with someone", "Part of a building",
+       "A mass-produced offering", "A portrait of a real person", "A protective figure"],
     ],
   };
 
@@ -297,14 +298,25 @@
     const p = tier === 0 ? 0.10 : tier === 1 ? 0.55 : 0.92;
     if (rng.chance(p)) lines.push(rng.pick(NOTE_EERIE[tier]));
     else if (tier === 0) lines.push(rng.pick(NOTE_EERIE[0]));
+    /* Sentences separated so the caption can breathe. */
     return lines.join(" ");
   }
 
   function buildName(rng, a, culture) {
-    const q = rng.pick(QUALIFIERS[a.condition.id]);
+    /* Condition is shown as its own field; only a light qualifier, and often
+       none, so titles stay readable on the wall label. */
+    const q = rng.pick(QUALIFIERS[a.condition.id] || [""]);
     if (a.kind === "object") return rng.pick(nounFor(a.objectType)) + q;
-    if (a.kind === "painting") return culture.paintNoun + q;
-    return culture.sculptNoun + q;
+    if (a.kind === "painting") return (culture.paintNoun || "Painting") + q;
+    return (culture.sculptNoun || "Sculpture") + q;
+  }
+
+  /* One short line for the caption strip: what it is, in human words. */
+  function blurb(a) {
+    const mat = materialLabel(a.material);
+    if (a.kind === "painting") return "A painting on " + mat.toLowerCase().replace(/^paint on /, "") + ".";
+    if (a.kind === "sculpture") return "A sculpture in " + mat.toLowerCase() + ".";
+    return mat + ".";
   }
 
   function buildReadings(rng, a) {
@@ -500,6 +512,6 @@
 
   S7.artifacts = {
     CONDITIONS, RARITIES, makeArtifact, spriteFor, thumbFor, scaledFor,
-    materialLabel, physical, OBJECT_NOUNS,
+    materialLabel, physical, blurb, OBJECT_NOUNS,
   };
 })(window.S7 = window.S7 || {});

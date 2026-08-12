@@ -151,11 +151,11 @@
     show("m-interp", true);
   }
 
-  /* A one-line description of what is visible so far. */
+  /* A one-line description of what is visible so far, while still half buried. */
   function describe(a) {
-    if (a.kind === "painting") return "A painted surface, partially exposed.";
-    if (a.kind === "sculpture") return "A worked form in " + S7.artifacts.materialLabel(a.material).toLowerCase() + ".";
-    return "Something " + S7.artifacts.materialLabel(a.material).toLowerCase() + ", in the matrix.";
+    if (a.kind === "painting") return "A painted surface, only partly uncovered.";
+    if (a.kind === "sculpture") return "A carved form in " + S7.artifacts.materialLabel(a.material).toLowerCase() + ".";
+    return "Something " + S7.artifacts.materialLabel(a.material).toLowerCase() + ", still in the ground.";
   }
 
   /* ---------- the accession dialog -------------------------------------------- */
@@ -269,7 +269,9 @@
 
   /* ---------- the gallery floor --------------------------------------------------- */
 
-  /* The label under the floor: what you just clicked on. */
+  /* The label under the floor: what you just clicked on. Written the way a
+     gallery label is written — name, where it is from, a short note — not a
+     dump of every field on the accession card. */
   function showCaption(a) {
     const box = $("gal-caption");
     if (!a) {
@@ -280,16 +282,23 @@
     const cu = S7.cultures.byId[a.cultureId];
     const era = S7.cultures.eraAt(a.depth);
     const phys = S7.artifacts.physical(a);
+    const where = cu
+      ? (cu.name + (cu.period && cu.period !== "—" ? ", " + cu.period : ""))
+      : "No accepted source";
+    const facts = [
+      "Item " + a.no,
+      a.condition.n,
+      a.rarity.n,
+      "found at " + a.depth.toFixed(1) + " m",
+    ];
+    if (phys.monumental) facts.push("monumental");
     box.innerHTML =
       '<div class="caprow"><div>' +
       '<p class="capname"><span class="capdot ' + a.rarity.css + '"></span>' + V.esc(a.name) + '</p>' +
-      '<p class="capmeta">' + V.esc(cu ? cu.name : "Unattributed") +
-      ' · ' + V.esc(cu ? cu.period : "no accepted context") +
+      '<p class="capmeta">' + V.esc(where) +
       ' · ' + V.esc(S7.artifacts.materialLabel(a.material)) + '</p>' +
-      '<p class="capnote">Item ' + a.no + ' · ' + V.esc(a.condition.n) + ' · ' + V.esc(a.rarity.n) +
-      ' · lifted at ' + a.depth.toFixed(1) + ' m from the ' + V.esc(era.name.toLowerCase()) +
-      (phys.monumental ? ' · <b>monumental</b>' : '') + '</p>' +
-      '<p class="capnote" style="margin-top:5px">' + V.esc(a.notes) + '</p>' +
+      '<p class="capnote">' + V.esc(facts.join(" · ")) + '</p>' +
+      '<p class="capnote capdesc">' + V.esc(a.notes) + '</p>' +
       '</div>' +
       '<button class="action" id="cap-open" style="width:auto;flex:none">' +
       '<span class="bt">Full record</span></button></div>';

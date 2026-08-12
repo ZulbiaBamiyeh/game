@@ -896,15 +896,18 @@
     ctx.textAlign = "left";
   }
 
-  /* The card beside the piece, the way a real gallery names things. */
+  /* The card beside the piece — short, plain, the way a real gallery writes. */
   function drawWallLabel(e) {
     const b = exhibitBox(e);
-    const cu = S7.cultures.byId[e.a.cultureId];
+    const a = e.a;
+    const cu = S7.cultures.byId[a.cultureId];
+    const from = cu ? cu.name : "Unknown source";
+    const period = cu && cu.period && cu.period !== "—" ? cu.period : "";
     const lines = [
-      e.a.name,
-      (cu ? cu.name : "Unattributed") + " · " + (cu ? cu.period : "—"),
-      S7.artifacts.materialLabel(e.a.material) + " · " + e.a.condition.n,
-      "Item " + e.a.no + " · " + e.a.depth.toFixed(1) + " m",
+      a.name,
+      period ? from + " · " + period : from,
+      S7.artifacts.materialLabel(a.material) + " · " + a.condition.n,
+      "Item " + a.no + " · found at " + a.depth.toFixed(1) + " m",
     ];
     ctx.font = "10px ui-monospace, monospace";
     const w = Math.max(...lines.map((l, i) => ctx.measureText(l).width + (i === 0 ? 2 : 0))) + 16;

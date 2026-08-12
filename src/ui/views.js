@@ -319,15 +319,16 @@
     opts = opts || {};
     const cu = C.byId[a.cultureId];
     const era = C.eraAt(a.depth);
+    const kindLabel = a.kind === "object" ? "Object" : a.kind === "painting" ? "Painting" : "Sculpture";
     const fields = [
-      ["Culture", cu ? cu.name : "—"],
-      ["Attribution", cu && cu.eerie >= 3 ? "None available" : (cu ? cu.region : "—")],
-      ["Est. period", a.keystone && a.name === "Wristwatch" ? "" : (cu ? cu.period : "—")],
-      ["Class", a.kind === "object" ? "Object" : a.kind === "painting" ? "Painting" : "Sculpture"],
+      ["From", cu ? cu.name : "Unknown"],
+      ["Region", cu && cu.eerie >= 3 ? "Not established" : (cu ? cu.region : "—")],
+      ["Period", a.keystone && a.name === "Wristwatch" ? "" : (cu ? cu.period : "—")],
+      ["Type", kindLabel],
       ["Material", A.materialLabel(a.material)],
       ["Condition", a.condition.n + " — " + a.condition.note],
       ["Rarity", a.rarity.n],
-      ["Depth", a.depth.toFixed(1) + " m · " + era.name],
+      ["Found at", a.depth.toFixed(1) + " m · " + era.name],
       ["Significance", a.significance.toFixed(1)],
     ];
     let f = "";
