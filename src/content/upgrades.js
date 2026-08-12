@@ -13,71 +13,71 @@
 
   const EXCAVATION = [
     { id: "crew", name: "Take on a digger", base: 8, mul: 1.19, max: 18,
-      desc: (l) => "Clearing rate. " + (l + 1) + " on shift.",
-      flavour: "Somebody has to move the spoil.",
+      desc: (l) => "Faster clearing. " + (l + 1) + " people on the face.",
+      flavour: "Somebody has to bag the spoil.",
       unlock: () => true },
 
     { id: "drill", name: "Service the drill", base: 12, mul: 1.21, max: 18,
-      desc: (l) => "Descent rate, rating " + (l + 1) + ".",
-      flavour: "It came second-hand and it shows.",
+      desc: (l) => "Faster descent. The bit spins harder (mk " + (l + 1) + ").",
+      flavour: "It came second-hand. That is fixable.",
       unlock: () => true },
 
     { id: "tools", name: "Issue hand tools", base: 20, mul: 1.28, max: 15,
-      desc: () => "+1 brush charge, faster recovery.",
+      desc: () => "+1 brush charge. Finds clear faster.",
       flavour: "Trowels, brushes, and one very good dental pick.",
       unlock: (S) => S.stats.finds >= 1,
       eff: (S) => { S.maxStam += 1; S.stamina += 1; S.mul.stamRate *= 0.94; } },
 
     { id: "lamps", name: "String more lamps", base: 30, mul: 1.26, max: 15,
-      desc: () => "−4% distance between finds. The shaft gets brighter.",
-      flavour: "You see more when you can see.",
+      desc: () => "Finds closer together. The shaft gets visibly brighter.",
+      flavour: "You find more when you can see.",
       unlock: (S) => S.stats.finds >= 2,
       eff: (S) => { S.mul.findGap *= 0.96; } },
 
     { id: "sieve", name: "Build a spoil sieve", base: 55, mul: 1.30, max: 18,
-      desc: () => "−5% distance between finds.",
-      flavour: "Half of what matters is in the spoil heap.",
+      desc: () => "Finds closer together — less lost in the heap.",
+      flavour: "Half of what matters is in the spoil.",
       unlock: (S) => S.stats.finds >= 4,
       eff: (S) => { S.mul.findGap *= 0.95; } },
 
     { id: "winch", name: "Rig a powered winch", base: 90, mul: 1.28, max: 18,
-      desc: () => "+5% descent rate.",
+      desc: () => "+5% descent. A proper cable down the shaft.",
       flavour: "Down is easy. Up is the expensive direction.",
       unlock: (S) => S.depth >= 25,
       eff: (S) => { S.mul.descent *= 1.05; } },
 
     { id: "conserv", name: "Conservation bench", base: 140, mul: 1.34, max: 15,
-      desc: () => "+5% chance of better condition on every find.",
+      desc: () => "Finds come up in better condition more often.",
       flavour: "What you do in the first hour decides the next century.",
       unlock: (S) => S.stats.finds >= 8,
       eff: (S) => { S.bonus.condition += 0.05; } },
 
     { id: "survey", name: "Second survey team", base: 220, mul: 1.36, max: 15,
-      desc: () => "+4% chance of a rarer find.",
+      desc: () => "Rarer finds turn up more often.",
       flavour: "Two pairs of eyes on the same square metre.",
       unlock: (S) => S.stats.finds >= 12,
       eff: (S) => { S.bonus.rarity += 0.04; } },
 
     { id: "lab", name: "Fit out a field lab", base: 320, mul: 1.34, max: 18,
-      desc: () => "+12% Understanding from all sources.",
+      desc: () => "+12% Understanding from study and interpretations.",
       flavour: "A microscope, a kettle, and somewhere to put them.",
       unlock: (S) => S.depth >= 60,
       eff: (S) => { S.mul.understanding *= 1.12; } },
 
     { id: "shoring", name: "Deep-shaft shoring", base: 600, mul: 1.38, max: 15,
-      desc: () => "+6% descent below 200 m.",
+      desc: () => "+6% descent below 200 m. Tighter timber in the hole.",
       flavour: "Below two hundred metres the ground stops helping.",
       unlock: (S) => S.depth >= 150,
       eff: (S) => { S.mul.deepDescent *= 1.06; } },
 
     { id: "sonde", name: "Downhole sonde", base: 1400, mul: 1.40, max: 18,
-      desc: () => "−6% distance between finds, and it reads deeper than the drill.",
+      desc: () => "Finds closer together. A probe reads ahead of the bit.",
       flavour: "It sees the next find before the drill reaches it.",
       unlock: (S) => S.depth >= 260,
       eff: (S) => { S.mul.findGap *= 0.94; } },
 
     { id: "core", name: "Continuous core barrel", base: 4200, mul: 1.42, max: 18,
-      desc: () => "+7% descent, +5% clearing.",
+      desc: () => "+7% descent, +5% clearing. A thicker, hungrier bit.",
       flavour: "Nothing is lost between the ground and the tray.",
       unlock: (S) => S.depth >= 380,
       eff: (S) => { S.mul.descent *= 1.07; S.mul.clear *= 1.05; } },
@@ -177,39 +177,48 @@
 
   /* Research is bought with Understanding, not money, and each line is bought
      once. These are the structural unlocks — the things that change what you
-     can do rather than how fast you do it. */
+     can do rather than how fast you do it. Copy stays free of plot spoilers;
+     the player should earn the weirdness in the shaft, not read it in a shop. */
   const RESEARCH = [
     { id: "typology", name: "Establish a typology", cost: 40,
-      desc: "Interpretation options are ordered. The correct reading is never last.",
+      tag: "Method",
+      desc: "Interpretation choices are sorted so the right one is easier to spot.",
       flavour: "Once you can name the type, you can name the type." },
 
     { id: "autobrush", name: "Standing excavation orders", cost: 90,
-      desc: "The crew keep clearing a find even while you are looking at the museum.",
-      flavour: "They do not actually need you standing over them." },
+      tag: "Crew",
+      desc: "The crew keep brushing a find while you are in the museum.",
+      flavour: "They do not need you standing over them." },
 
     { id: "assay", name: "Portable assay kit", cost: 160,
-      desc: "The study result is shown before you commit to accessioning.",
-      flavour: "Know what it teaches before you sign for it." },
+      tag: "Lab",
+      desc: "See what a find teaches before you decide to put it on show.",
+      flavour: "Know the lesson before you sign for it." },
 
     { id: "duplicate", name: "Reference collection", cost: 300,
-      desc: "Duplicate cultures on display no longer dilute breadth.",
-      flavour: "A second one of a thing is still evidence." },
+      tag: "Museum",
+      desc: "Showing two of the same tradition no longer weakens the rating.",
+      flavour: "A second example is still evidence." },
 
     { id: "seriation", name: "Seriation of the deposit", cost: 550,
-      desc: "−12% distance between finds at every depth.",
-      flavour: "The deposit has an order. Reading it tells you where to stop." },
+      tag: "Site",
+      desc: "Finds turn up closer together at every depth.",
+      flavour: "The deposit has a pattern. Reading it helps." },
 
     { id: "stratspec", name: "Stratigraphic specialist", cost: 900,
-      desc: "+20% descent rate.",
-      flavour: "She can tell you what is coming from the colour of the spoil." },
+      tag: "Site",
+      desc: "+20% descent rate — she reads the spoil as you cut.",
+      flavour: "She knows what is coming from the colour of the dirt." },
 
     { id: "provenance", name: "Provenance study", cost: 1500,
+      tag: "Museum",
       desc: "+25% museum rating. The catalogue becomes citable.",
       flavour: "Where a thing came from is worth more than the thing." },
 
-    { id: "floor", name: "Model the deposit floor", cost: 2600,
-      desc: "+30% descent below 400 m. Reveals how deep this goes.",
-      flavour: "There is a bottom. Somebody put it there." },
+    { id: "floor", name: "Deep-section model", cost: 2600,
+      tag: "Site",
+      desc: "+30% descent below 400 m. The deep cut goes faster.",
+      flavour: "The lower ground is not the same problem as the upper." },
   ];
 
   const RESEARCH_EFF = {

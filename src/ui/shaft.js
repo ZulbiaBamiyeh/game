@@ -142,7 +142,16 @@
     panRows = Math.max(lo, Math.min(hi, panRows));
     panTarget = Math.max(lo, Math.min(hi, panTarget));
     const rowOff = Math.round(followRow + panRows);
-    const phase = Math.floor(performance.now() / 70);
+    /* Upgrade levels that change how the hole looks, not just the numbers. */
+    const drillLvl = S.up.drill || 0;
+    const winchLvl = S.up.winch || 0;
+    const shoringLvl = S.up.shoring || 0;
+    const sondeLvl = S.up.sonde || 0;
+    const coreLvl = S.up.core || 0;
+    const crewLvl = S.up.crew || 0;
+    /* Higher drill rating → faster spin and more spoil. */
+    const spinMs = Math.max(16, 72 - drillLvl * 3.2 - coreLvl * 1.5);
+    const phase = Math.floor(performance.now() / spinMs);
     const eraSeed = 11;
 
     /* wall */
@@ -178,23 +187,35 @@
       }
     }
 
-    /* timber shoring across the shaft, every nine rows */
+    /* timber shoring — denser as you buy deep-shaft shoring */
+    const shoreGap = Math.max(5, 9 - Math.min(4, Math.floor(shoringLvl / 3)));
     for (let wr = rowOff; wr < rowOff + BH; wr++) {
-      if (wr >= drillRow - 1 || wr % 9 !== 0 || wr < 2) continue;
+      if (wr >= drillRow - 1 || wr % shoreGap !== 0 || wr < 2) continue;
       const y = wr - rowOff;
       for (let x = TL; x <= TR; x++) {
-        bufPix[y * BW + x] = ramp32("timber", 4 + (x % 2 ? 0.6 : 0));
+        bufPix[y * BW + x] = ramp32("timber", 4 + (x % 2 ? 0.6 : 0) + (shoringLvl > 4 ? 0.4 : 0));
         if (y + 1 < BH) bufPix[(y + 1) * BW + x] = ramp32("timber", 2);
       }
-      bufPix[y * BW + TL + 1] = ramp32("iron", 5);
-      bufPix[y * BW + TR - 1] = ramp32("iron", 5);
+      bufPix[y * BW + TL + 1] = ramp32("iron", 5 + (shoringLvl > 2 ? 1 : 0));
+      bufPix[y * BW + TR - 1] = ramp32("iron", 5 + (shoringLvl > 2 ? 1 : 0));
+      if (shoringLvl >= 6) {
+        /* steel straps on heavy shoring */
+        if (y + 2 < BH) {
+          bufPix[(y + 2) * BW + TL + 2] = ramp32("iron", 4);
+          bufPix[(y + 2) * BW + TR - 2] = ramp32("iron", 4);
+        }
+      }
     }
     /* vertical props */
     for (let y = 0; y < BH; y++) {
       const wr = rowOff + y;
-      if (wr >= drillRow - 1 || wr % 9 === 0) continue;
+      if (wr >= drillRow - 1 || wr % shoreGap === 0) continue;
       bufPix[y * BW + TL + 1] = ramp32("timber", 3 + (wr % 3 === 0 ? 0.8 : 0));
       bufPix[y * BW + TR - 1] = ramp32("timber", 3 + (wr % 3 === 0 ? 0.8 : 0));
+      if (shoringLvl >= 3 && wr % 2 === 0) {
+        bufPix[y * BW + TL + 2] = ramp32("timber", 2.4);
+        bufPix[y * BW + TR - 2] = ramp32("timber", 2.4);
+      }
     }
 
     /* lamps — more of them as you buy them, and they actually light the wall */
@@ -220,24 +241,40 @@
         }
     }
 
-    /* the cable, swinging slightly */
+    /* cables — a thin rope at first; powered winch adds a heavy pair */
+    const cableN = winchLvl > 0 ? (winchLvl >= 6 ? 3 : 2) : 1;
     for (let y = 0; y < BH; y++) {
       const wr = rowOff + y;
       if (wr >= drillRow - 6) continue;
-      bufPix[y * BW + Math.round(TL + 4 + Math.sin(wr * 0.09) * 1.6)] = ramp32("iron", 2);
+      const swing = Math.sin(wr * 0.09 + phase * 0.02) * (winchLvl > 0 ? 0.9 : 1.6);
+      for (let c = 0; c < cableN; c++) {
+        const cxCable = Math.round(TL + 4 + c * 3 + swing);
+        if (cxCable > TL && cxCable < TR)
+          bufPix[y * BW + cxCable] = ramp32("iron", winchLvl > 0 ? 4 : 2);
+      }
     }
 
-    /* the drill head */
+    /* the drill head — grows, spins faster, and throws more spoil as you
+       service it. Core barrel thickens the stem; sonde hangs a probe below. */
     const dy0 = drillRow - rowOff;
-    if (dy0 > -20 && dy0 < BH + 20) {
+    if (dy0 > -24 && dy0 < BH + 24) {
       const cx = Math.floor((TL + TR) / 2);
-      for (let y = 0; y < dy0 - 8; y++) {
+      const bodyHalf = 6 + Math.min(4, Math.floor(drillLvl / 3) + (coreLvl > 0 ? 1 : 0));
+      const bitHalf = 8 + Math.min(5, Math.floor(drillLvl / 2.5) + (coreLvl > 0 ? 2 : 0));
+      const bodyTop = dy0 - (9 + Math.min(4, Math.floor(drillLvl / 4)));
+
+      /* stem / kelly bar */
+      for (let y = 0; y < bodyTop; y++) {
         if (y < 0 || y >= BH) continue;
-        bufPix[y * BW + cx - 2] = ramp32("iron", 4);
-        bufPix[y * BW + cx + 2] = ramp32("iron", 4);
-        if ((rowOff + y) % 4 === 0)
-          for (let x = cx - 2; x <= cx + 2; x++) bufPix[y * BW + x] = ramp32("iron", 5);
+        const thick = coreLvl > 0 ? 2 : 1;
+        for (let t = -thick; t <= thick; t++) {
+          if (t === -thick || t === thick) bufPix[y * BW + cx + t] = ramp32("iron", 4 + (drillLvl > 5 ? 1 : 0));
+        }
+        if ((rowOff + y + phase) % Math.max(2, 5 - Math.floor(drillLvl / 5)) === 0)
+          for (let x = cx - thick - 1; x <= cx + thick + 1; x++)
+            if (x >= 0 && x < BW) bufPix[y * BW + x] = ramp32("iron", 5);
       }
+
       const box = (x0, y0, x1, y1, fn) => {
         for (let y = y0; y <= y1; y++)
           for (let x = x0; x <= x1; x++) {
@@ -245,43 +282,93 @@
             bufPix[y * BW + x] = fn(x, y);
           }
       };
-      box(cx - 7, dy0 - 8, cx + 7, dy0 - 2, (x, y) => {
-        let i = 3.2 + Math.sin((x - (cx - 7)) / 14 * Math.PI) * 2.6;
-        if (y === dy0 - 8) i += 1.4;
+
+      /* main housing */
+      box(cx - bodyHalf, bodyTop, cx + bodyHalf, dy0 - 2, (x, y) => {
+        let i = 3.2 + Math.sin((x - (cx - bodyHalf)) / Math.max(1, bodyHalf * 2) * Math.PI) * 2.6;
+        if (y === bodyTop) i += 1.4;
         if (y === dy0 - 2) i -= 1.6;
+        if (drillLvl >= 8) i += 0.6;
         return ramp32("iron", i);
       });
-      box(cx - 7, dy0 - 5, cx + 7, dy0 - 4, (x) => ((x % 4 < 2) ? px32(199, 154, 66) : px32(42, 34, 15)));
-      box(cx - 9, dy0 - 2, cx + 9, dy0 + 1, (x, y) =>
-        ramp32("iron", 2.6 + Math.sin((x - (cx - 9)) / 18 * Math.PI) * 2.2 + (y === dy0 - 2 ? 1.2 : 0)));
-      /* teeth, animated */
+      /* status stripe — ochre for a healthy serviced unit */
+      box(cx - bodyHalf, dy0 - 5, cx + bodyHalf, dy0 - 4, (x) =>
+        ((x + phase) % 4 < 2)
+          ? px32(drillLvl >= 4 ? 220 : 199, drillLvl >= 4 ? 170 : 154, 66)
+          : px32(42, 34, 15));
+
+      /* cutting head */
+      box(cx - bitHalf, dy0 - 2, cx + bitHalf, dy0 + 1, (x, y) =>
+        ramp32("iron", 2.6 + Math.sin((x - (cx - bitHalf)) / Math.max(1, bitHalf * 2) * Math.PI) * 2.2
+          + (y === dy0 - 2 ? 1.2 : 0) + (coreLvl > 0 ? 0.5 : 0)));
+
+      /* teeth, animated — denser and longer with level */
       const cutting = !S.active && !S.pending;
-      for (let x = cx - 9; x <= cx + 9; x++)
-        if ((x + (cutting ? phase : 0)) % 3 === 0) {
-          if (dy0 + 2 >= 0 && dy0 + 2 < BH) bufPix[(dy0 + 2) * BW + x] = ramp32("iron", 7);
-          if (dy0 + 3 >= 0 && dy0 + 3 < BH && (x + phase) % 6 === 0) bufPix[(dy0 + 3) * BW + x] = ramp32("iron", 6);
+      const toothStep = Math.max(2, 3 - Math.floor(drillLvl / 8));
+      const toothReach = 2 + Math.min(3, Math.floor(drillLvl / 5));
+      for (let x = cx - bitHalf; x <= cx + bitHalf; x++)
+        if ((x + (cutting ? phase : 0)) % toothStep === 0) {
+          for (let t = 2; t <= toothReach; t++)
+            if (dy0 + t >= 0 && dy0 + t < BH)
+              bufPix[(dy0 + t) * BW + x] = ramp32("iron", 6 + (t === toothReach ? 1 : 0));
         }
-      /* spoil thrown up by the cut */
-      if (cutting)
-        for (let i = 0; i < 26; i++) {
-          const a = hsh(i, phase, 3) * 6.283, r = 2 + hsh(i, phase, 5) * 8;
-          const x = Math.round(cx + Math.cos(a) * r), y = Math.round(dy0 + 1 + Math.sin(a) * r * 0.4);
+
+      /* spoil thrown up by the cut — more of it, thrown higher, when the bit is rated */
+      if (cutting) {
+        const nSpoil = 22 + drillLvl * 4 + coreLvl * 3;
+        const rad = 7 + Math.min(8, drillLvl * 0.55);
+        for (let i = 0; i < nSpoil; i++) {
+          const a = hsh(i, phase, 3) * 6.283, r = 2 + hsh(i, phase, 5) * rad;
+          const x = Math.round(cx + Math.cos(a) * r);
+          const y = Math.round(dy0 + 1 + Math.sin(a) * r * (0.35 + drillLvl * 0.02));
           if (y < 0 || y >= BH || x < TL || x > TR) continue;
-          bufPix[y * BW + x] = ramp32(C.eraAt(S.depth).ramp, 5.5);
+          bufPix[y * BW + x] = ramp32(C.eraAt(S.depth).ramp, 5.5 + (drillLvl > 6 ? 0.8 : 0));
         }
-      /* work light at the face */
-      for (let dy = -9; dy <= 9; dy++)
-        for (let dp = -13; dp <= 13; dp++) {
+      }
+
+      /* downhole sonde — a thin probe and a ping below the face */
+      if (sondeLvl > 0) {
+        const reach = 6 + Math.min(10, sondeLvl);
+        for (let t = 3; t < reach; t++) {
+          const y = dy0 + t;
+          if (y < 0 || y >= BH) continue;
+          bufPix[y * BW + cx] = ramp32("iron", 6);
+          if (t === reach - 1) {
+            bufPix[y * BW + cx - 1] = px32(80, 180, 120);
+            bufPix[y * BW + cx + 1] = px32(80, 180, 120);
+            if (y + 1 < BH) bufPix[(y + 1) * BW + cx] = px32(120, 220, 150);
+          }
+        }
+      }
+
+      /* work light at the face — brighter with lamps and a better drill */
+      const lightR = 12 + Math.min(6, Math.floor(drillLvl / 3)) + Math.min(4, S.up.lamps || 0);
+      for (let dy = -lightR; dy <= lightR; dy++)
+        for (let dp = -lightR - 2; dp <= lightR + 2; dp++) {
           const yy = dy0 + dy, xx = cx + dp;
           if (yy < 0 || yy >= BH || xx < 0 || xx >= BW) continue;
           const d = Math.sqrt(dp * dp + dy * dy * 1.7);
-          if (d > 13) continue;
-          const k = 1 + (1 - d / 13) * 0.7, c = bufPix[yy * BW + xx];
+          if (d > lightR) continue;
+          const k = 1 + (1 - d / lightR) * (0.55 + drillLvl * 0.02);
+          const c = bufPix[yy * BW + xx];
           bufPix[yy * BW + xx] = px32(
             clamp((c & 255) * k * 1.04, 0, 255) | 0,
             clamp(((c >> 8) & 255) * k, 0, 255) | 0,
             clamp(((c >> 16) & 255) * k * 0.92, 0, 255) | 0);
         }
+
+      /* crew silhouettes at the top of the visible hole when you hire diggers */
+      if (crewLvl > 0 && dy0 > 14) {
+        const nCrew = Math.min(4, 1 + Math.floor(crewLvl / 4));
+        for (let c = 0; c < nCrew; c++) {
+          const px = TL + 3 + c * 4;
+          const py = Math.max(1, Math.min(BH - 6, dy0 - 14 - (c % 2)));
+          if (px >= TR - 2) break;
+          bufPix[py * BW + px] = px32(60, 48, 32);
+          if (py + 1 < BH) bufPix[(py + 1) * BW + px] = px32(90, 70, 45);
+          if (py + 2 < BH) bufPix[(py + 2) * BW + px] = px32(40, 36, 28);
+        }
+      }
     }
 
     bufCtx.putImageData(bufImg, 0, 0);

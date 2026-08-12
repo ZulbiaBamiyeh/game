@@ -115,28 +115,58 @@
   }
 
   function renderResearch(S, buyResearch, onNewSite) {
-    let html = "";
-    for (const r of U.RESEARCH) {
-      const owned = !!S.research[r.id];
-      const can = !owned && S.understanding >= r.cost;
-      html +=
-        '<button class="action' + (can ? " afford" : "") + '" data-res="' + r.id + '"' +
-        (can ? "" : " disabled") + '>' +
-        '<span class="bt">' + esc(r.name) +
-        '<span class="cost' + (owned || can ? "" : " no") + '">' + (owned ? "held" : fmt(r.cost) + " U") + '</span>' +
-        '</span>' +
-        '<span class="bd">' + esc(r.desc) + '</span>' +
-        '<span class="bf">' + esc(r.flavour) + '</span>' +
+    /* Understanding meter — the currency of this tab, front and centre. */
+    const nextRes = U.RESEARCH.find((r) => !S.research[r.id]);
+    const uHave = S.understanding;
+    const uNeed = nextRes ? nextRes.cost : 0;
+    const uPct = nextRes ? Math.min(100, Math.round(100 * uHave / Math.max(1, uNeed))) : 100;
+    let html =
+      '<div class="resmeter">' +
+      '<div class="resmeter-top"><span>Understanding</span><span>' +
+      fmt(uHave) + (nextRes ? " / " + fmt(uNeed) : "") + "</span></div>" +
+      '<div class="resbar"><i style="width:' + uPct + '%"></i></div>' +
+      '<p class="reshint">' +
+      (nextRes
+        ? (uHave >= uNeed
+          ? "Ready to buy: " + esc(nextRes.name) + "."
+          : fmt(Math.max(0, uNeed - uHave)) + " more to unlock the next line.")
+        : "Every research line is held. The programme is complete.") +
+      "</p></div>";
+
+    if (S7.game.canOpenNewSite(S)) {
+      html += '<button class="action primary" data-newsite="1">' +
+        '<span class="bt">Open ' + esc(nextSite(S)) + '<span class="cost">+45% rates</span></span>' +
+        '<span class="bd">' + esc(S7.game.siteName(S)) + ' is finished. Depth and site gear reset; ' +
+        'the collection, museum, and research stay.</span>' +
+        '<span class="bf">Another field. Another sounding.</span>' +
         '</button>';
     }
-    if (S7.game.canOpenNewSite(S)) {
-      html = '<button class="action primary" data-newsite="1">' +
-        '<span class="bt">Open ' + esc(nextSite(S)) + '<span class="cost">+45% rates</span></span>' +
-        '<span class="bd">' + esc(S7.game.siteName(S)) + ' is finished. Another field, another ' +
-        'impossible sounding. Depth and all site equipment reset; the collection, the museum ' +
-        'and the research stay.</span>' +
-        '<span class="bf">They were not hiding it. They were accessioning it.</span>' +
-        '</button>' + html;
+
+    /* Show every completed line, plus the next two still locked — no wall of
+       endgame spoilers on day one. */
+    let lockedShown = 0;
+    for (const r of U.RESEARCH) {
+      const owned = !!S.research[r.id];
+      if (!owned) {
+        if (lockedShown >= 2) continue;
+        lockedShown++;
+      }
+      const can = !owned && uHave >= r.cost;
+      const far = !owned && !can;
+      const tag = r.tag ? '<span class="restag">' + esc(r.tag) + "</span>" : "";
+      html +=
+        '<button class="action rescard' + (can ? " afford" : "") + (owned ? " owned" : "") +
+        (far ? " locked" : "") + '" data-res="' + r.id + '"' +
+        (can ? "" : " disabled") + ">" +
+        '<span class="bt">' + tag + esc(owned || !far ? r.name : "Sealed brief") +
+        '<span class="cost' + (owned || can ? "" : " no") + '">' +
+        (owned ? "held" : fmt(r.cost) + " U") + "</span></span>" +
+        '<span class="bd">' + esc(owned || !far ? r.desc
+          : "Spend Understanding on the open briefs first.") + "</span>" +
+        (owned || !far
+          ? '<span class="bf">' + esc(r.flavour) + "</span>"
+          : "") +
+        "</button>";
     }
     $("researchlist").innerHTML = html;
     for (const el of document.querySelectorAll("[data-res]"))
@@ -144,33 +174,37 @@
     const ns = document.querySelector("[data-newsite]");
     if (ns && onNewSite) ns.addEventListener("click", onNewSite);
 
-    /* statistics */
+    /* statistics — keep it short and useful, not a spreadsheet */
     const acc = S.stats.filed ? Math.round(100 * S.stats.correct / S.stats.filed) : 0;
     const rows = [
-      ["Current site", S7.game.siteName(S)],
-      ["Sites opened", S.sites || 1],
-      ["Time on site", fmtTime(S.stats.playtime)],
-      ["Deepest point", S.depth.toFixed(1) + " m"],
-      ["Finds recovered", S.stats.finds],
-      ["Accessioned", S.stats.accessioned],
+      ["Site", S7.game.siteName(S)],
+      ["Depth", S.depth.toFixed(1) + " m"],
+      ["Finds / accessioned", S.stats.finds + " / " + S.stats.accessioned],
       ["On display", M.survey(S).count],
-      ["Interpretations filed", S.stats.filed],
-      ["Correct", S.stats.correct + " (" + acc + "%)"],
+      ["Interpretations", S.stats.filed + (S.stats.filed ? " · " + acc + "% right" : "")],
       ["Visitors to date", fmt(S.stats.visitorsTotal)],
-      ["Funding earned", fmt(S.stats.earned)],
-      ["Traditions represented", M.survey(S).cultures + " of " + C.CULTURES.length],
+      ["Time on site", fmtTime(S.stats.playtime)],
     ];
     $("statlist").innerHTML = rows.map((r) =>
       '<div class="field"><div class="fk">' + esc(r[0]) + '</div><div class="fv">' + esc(r[1]) + '</div></div>').join("");
 
-    /* the deposit, band by band */
+    /* Deposit log: only name what you have reached. Future bands stay blank so
+       the research tab does not spoil what is under the drill. */
     const here = C.eraAt(S.depth);
     $("eralist").innerHTML = C.ERAS.map((e) => {
+      const reached = S.depth >= e.to || e.id === here.id;
       const state = e.id === here.id ? "on" : (S.depth >= e.to ? "past" : "future");
-      const known = S.depth >= e.to || e.id === here.id;
+      if (!reached) {
+        return '<div class="erarow future">' +
+          '<span class="era-unknown">Not yet reached</span>' +
+          '<span class="ep">???</span></div>';
+      }
+      const from = e === C.ERAS[0] ? 0 : C.ERAS[C.ERAS.indexOf(e) - 1].to;
+      const to = e.to >= 1e8 ? "…" : String(e.to);
       return '<div class="erarow ' + state + '">' +
-        '<span>' + esc(e.name) + '</span>' +
-        '<span class="ep">' + esc(known ? e.period : "—") + '</span></div>';
+        '<span>' + esc(e.name) +
+        '<span class="era-depth">' + from + "–" + to + " m</span></span>" +
+        '<span class="ep">' + esc(e.period) + "</span></div>";
     }).join("");
   }
 
