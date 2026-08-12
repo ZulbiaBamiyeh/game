@@ -160,11 +160,60 @@
       if (placed.has(era.id)) continue;
       const items = byRoom.get(era.id);
       if (!items || !items.length) continue;
-      /* Skip era buckets that only exist because everything was rehomed to a theme. */
       pushGalleryRoom(rooms, xRef, {
         id: era.id, name: era.name, period: era.period, short: era.name,
       }, items, wingLvl);
       placed.add(era.id);
+    }
+
+    /* Inject monumental mounted skeletons into the dinosaur hall (or a new
+       hall if the theme room does not exist yet). */
+    if (S7.skeletons) {
+      const mounts = S7.skeletons.mountsFor(S);
+      if (mounts.length) {
+        let dinoRoom = rooms.find((r) => r.era && r.era.id === "dinosaurs");
+        if (!dinoRoom) {
+          pushGalleryRoom(rooms, xRef, S7.cultures.galleryById.dinosaurs || {
+            id: "dinosaurs", name: "Hall of dinosaurs", period: "Mesozoic",
+            short: "Dinosaurs", theme: "dino",
+          }, mounts.slice(), wingLvl);
+          dinoRoom = rooms[rooms.length - 1];
+        } else {
+          /* Append mounts as leading showpieces of the hall. */
+          let cx = dinoRoom.x + ROOM_PAD;
+          const extra = [];
+          for (let i = 0; i < mounts.length; i++) {
+            const a = mounts[i];
+            const phys = S7.artifacts.physical(a);
+            extra.push({
+              a, x: cx + phys.w / 2, w: phys.w, h: phys.h,
+              mount: "plinth", index: i, phys, skeletonMount: true,
+            });
+            cx += phys.w;
+          }
+          /* Shift existing exhibits right to make room for the mounts. */
+          const shift = cx - (dinoRoom.x + ROOM_PAD);
+          for (const e of dinoRoom.exhibits) e.x += shift;
+          dinoRoom.exhibits = extra.concat(dinoRoom.exhibits);
+          dinoRoom.width += shift;
+          dinoRoom.items = mounts.concat(dinoRoom.items || []);
+          /* Re-pack rooms to the right of the dinosaur hall. */
+          let nx = dinoRoom.x + dinoRoom.width + DOOR;
+          for (const r of rooms) {
+            if (r.x <= dinoRoom.x) continue;
+            const dx = nx - r.x;
+            r.x += dx;
+            for (const e of r.exhibits) e.x += dx;
+            for (const b of r.benches) {
+              b.x += dx;
+              for (const s of b.seats) s.x += dx;
+            }
+            if (r.doorX !== undefined) r.doorX += dx;
+            if (r.deskX !== undefined) r.deskX += dx;
+            nx = r.x + r.width + DOOR;
+          }
+        }
+      }
     }
 
     /* Any custom rehang rooms not already placed. */
@@ -230,11 +279,16 @@
     let shown = 0;
     for (const a of S.collection) if (a.display !== false) shown++;
     const u = S.up || {};
+    /* Skeleton completion changes the floor plan (mounted showpieces). */
+    let sk = "";
+    if (S7.skeletons)
+      sk = S7.skeletons.progress(S).map((p) => p.kit.id + p.have + (p.complete ? "C" : "")).join(",");
     const key = S.collection.length + ":" + shown +
       ":s" + (u.shop || 0) +
       ":c" + (u.cafe || 0) +
       ":w" + (u.wing || 0) +
-      ":d" + (u.deepgal || 0);
+      ":d" + (u.deepgal || 0) +
+      ":k" + sk;
     if (key !== cacheKey) { cacheKey = key; cache = layout(S); }
     return cache;
   }

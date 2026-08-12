@@ -75,7 +75,15 @@
     /* Dinosaurs */
     dinoTooth: ["Dinosaur tooth", "Serrated predator tooth", "Fossil tooth"],
     dinoBone: ["Dinosaur limb bone", "Fossil long bone", "Hollow limb bone"],
-    dinoClaw: ["Dinosaur claw", "Raptorial claw", "Fossil claw"],
+    dinoFemur: ["Dinosaur femur", "Massive femur", "Hindlimb femur"],
+    dinoTibia: ["Dinosaur tibia", "Lower leg bone", "Tibia"],
+    dinoHumerus: ["Dinosaur humerus", "Forelimb bone", "Humerus"],
+    dinoJaw: ["Dinosaur jaw", "Dentary", "Lower jaw"],
+    dinoVert: ["Dinosaur vertebra", "Caudal vertebra", "Dorsal vertebra"],
+    dinoRib: ["Dinosaur rib", "Curved rib", "Rib element"],
+    dinoPelvis: ["Dinosaur pelvis", "Hip girdle", "Pelvic block"],
+    dinoTail: ["Tail vertebrae", "Caudal series", "Tail section"],
+    dinoClaw: ["Dinosaur claw", "Raptorial claw", "Pedal claw"],
     eggFossil: ["Dinosaur egg", "Fossil egg clutch piece", "Mineralised egg"],
     trackSlab: ["Footprint slab", "Trackway block", "Three-toed print"],
     /* Fossils */
@@ -394,7 +402,9 @@
       scarab: ["stone", "gold", "celadon", "obsid"], canopic: ["stone", "sand", "clay", "celadon"],
       ankh: ["gold", "bronze", "stone"], ushabti: ["celadon", "sand", "stone", "clay"],
       pectoral: ["gold", "stone", "glass"],
-      dinoTooth: ["bone", "stone", "chalk"], dinoBone: ["bone", "stone"], dinoClaw: ["bone", "stone", "obsid"],
+      dinoTooth: ["bone"], dinoBone: ["bone"], dinoClaw: ["bone"],
+      dinoFemur: ["bone"], dinoTibia: ["bone"], dinoHumerus: ["bone"], dinoJaw: ["bone"],
+      dinoVert: ["bone"], dinoRib: ["bone"], dinoPelvis: ["bone"], dinoTail: ["bone"],
       eggFossil: ["stone", "chalk", "sand"], trackSlab: ["stone", "sand", "chalk"],
       ammonite: ["stone", "chalk", "gold"], trilobite: ["stone", "chalk"], fernFossil: ["stone", "chalk", "sand"],
       crinoid: ["stone", "chalk"], fishFossil: ["stone", "chalk"], coralFossil: ["stone", "chalk", "sand"],
@@ -458,22 +468,42 @@
     const rolledCulture = pickCulture(rng, depth);
     const culture = opts.culture ? (C.byId[opts.culture] || rolledCulture) : rolledCulture;
 
-    const rolledKind = pickKind(rng, culture, depth);
-    const kind = opts.kind || rolledKind;
+    /* Dinosaur finds are mostly skeleton elements — bone by bone — so the hall
+       can be assembled. Occasional eggs/tracks remain as free finds. */
+    let skeletonRoll = null;
+    if (!opts.keystone && culture.gallery === "dinosaurs" && S7.skeletons && rng.chance(0.88)) {
+      skeletonRoll = S7.skeletons.rollPart(rng, culture.id, opts.heldSkeletons || null);
+    }
 
-    /* Object type: deeper levels bias toward showpieces (skulls, geodes, etc.). */
-    const rolledObject = kind === "object" ? pickObjectType(rng, culture, depth) : null;
-    const objectType = kind === "object" ? (opts.objectType || rolledObject) : null;
+    let kind, objectType, skeletonId, skeletonPart, skPartDef;
+    if (skeletonRoll && !opts.kind && !opts.objectType) {
+      skPartDef = skeletonRoll.part;
+      skeletonId = skeletonRoll.kit.id;
+      skeletonPart = skeletonRoll.partId;
+      kind = skPartDef.kind;
+      objectType = skPartDef.objectType || null;
+    } else {
+      const rolledKind = pickKind(rng, culture, depth);
+      kind = opts.kind || rolledKind;
+      const rolledObject = kind === "object" ? pickObjectType(rng, culture, depth) : null;
+      objectType = kind === "object" ? (opts.objectType || rolledObject) : null;
+      skeletonId = opts.skeletonId || null;
+      skeletonPart = opts.skeletonPart || null;
+    }
+    /* Pinned rehydration always wins. */
+    if (opts.kind) kind = opts.kind;
+    if (opts.objectType !== undefined && opts.objectType !== null) objectType = opts.objectType;
+    if (opts.skeletonId) skeletonId = opts.skeletonId;
+    if (opts.skeletonPart) skeletonPart = opts.skeletonPart;
+    if (skeletonPart && S7.skeletons) skPartDef = S7.skeletons.partDef(skeletonPart);
 
     const rolledCond = rollWeighted(rng, CONDITIONS, opts.condBonus || 0);
     const condition = opts.condition
       ? (CONDITIONS.find((c) => c.id === opts.condition) || rolledCond) : rolledCond;
 
-    /* Rarity is a depth story: the surface is mostly common; the floor of the
-       deposit is where significant and unique material lives. Gallery type
-       adds a little, but depth does the real work. */
     let rareBonus = (opts.rareBonus || 0) + depthRarityBonus(depth);
-    if (culture.gallery === "dinosaurs") rareBonus += 0.04;
+    if (culture.gallery === "dinosaurs") rareBonus += 0.06;
+    if (skeletonPart === "skull") rareBonus += 0.08;
     if (culture.gallery === "minerals") rareBonus += 0.03;
     if (culture.gallery === "fossils") rareBonus += 0.03;
     if (culture.gallery === "egypt") rareBonus += 0.02;
@@ -481,7 +511,7 @@
     const rarity = opts.rarity
       ? (RARITIES.find((r) => r.id === opts.rarity) || rolledRare) : rolledRare;
 
-    const material = opts.material || materialOf(rng, kind, culture, objectType);
+    const material = opts.material || (skeletonId ? "bone" : materialOf(rng, kind, culture, objectType));
 
     const a = {
       seed: seed >>> 0,
@@ -491,28 +521,38 @@
       condition, rarity,
       no: opts.no || "000",
       keystone: !!opts.keystone,
+      skeletonId: skeletonId || undefined,
+      skeletonPart: skeletonPart || undefined,
     };
-    const rolledName = buildName(rng, a, culture);
-    const rolledNotes = buildNotes(rng, a, culture);
-    a.name = opts.name || rolledName;
-    a.notes = opts.notes || rolledNotes;
+
+    if (skeletonId && skeletonPart && S7.skeletons && !opts.name) {
+      const kit = S7.skeletons.byId[skeletonId];
+      const p = skPartDef || S7.skeletons.partDef(skeletonPart);
+      a.name = (kit ? kit.short + " " : "") + (p ? p.label : "bone");
+      a.notes = "Element of a " + (kit ? kit.name : "dinosaur") + " skeleton (" +
+        (p ? p.label.toLowerCase() : "bone") + "). Recovered separately — the rest of the " +
+        "animal is still in the deposit, if it is here at all.";
+      if (kit) a.notes += " Collect every part to mount the complete " + kit.short.toLowerCase() + ".";
+    } else {
+      a.name = opts.name || buildName(rng, a, culture);
+      a.notes = opts.notes || buildNotes(rng, a, culture);
+    }
+    if (opts.name) a.name = opts.name;
+    if (opts.notes) a.notes = opts.notes;
     a.readings = buildReadings(rng, a);
 
-    /* Significance: depth and rarity do most of the work; themed showpieces
-       (a dinosaur skull, a canopic jar) still pay more so the halls feel won. */
     const kindWeight = kind === "painting" ? 1.35 : kind === "sculpture" ? 1.55 : 1.0;
     let galleryWeight = 1;
-    if (culture.gallery === "dinosaurs") galleryWeight = 1.35;
+    if (culture.gallery === "dinosaurs") galleryWeight = 1.4;
     else if (culture.gallery === "fossils") galleryWeight = 1.2;
     else if (culture.gallery === "minerals") galleryWeight = 1.22;
     else if (culture.gallery === "egypt") galleryWeight = 1.15;
     const depthWeight = 1 + depth * 0.0012;
+    let partSig = skPartDef ? skPartDef.sig : 0;
     a.significance = Math.round(
-      (5 + depth * 0.075) * kindWeight * galleryWeight * depthWeight *
-      condition.mult * rarity.mult * 10) / 10;
+      ((5 + depth * 0.075) * kindWeight * galleryWeight * depthWeight *
+        condition.mult * rarity.mult + partSig) * 10) / 10;
 
-    /* The upgrade this piece teaches. Rolled here so it can be shown before
-       the player commits to accessioning it. */
     a.boon = S7.boons.roll(rng, a);
     return a;
   }
@@ -532,17 +572,19 @@
     mirror: 19, bottle: 19, tablet: 19, bell: 20, bonefrag: 21, blade: 24,
     vessel: 29, blockStone: 32, marker: 36,
     scarab: 12, ankh: 16, ushabti: 22, canopic: 26, pectoral: 24,
-    dinoTooth: 18, dinoClaw: 20, ammonite: 22, trilobite: 18, crinoid: 16,
+    dinoTooth: 18, dinoClaw: 22, ammonite: 22, trilobite: 18, crinoid: 16,
     goldNugget: 14, pyrite: 16, fluorite: 18, opal: 15, meteorite: 22,
     crystal: 24, geode: 28, fernFossil: 30, fishFossil: 32, coralFossil: 26,
-    eggFossil: 24, dinoBone: 36, trackSlab: 40,
+    eggFossil: 24, dinoBone: 40, dinoFemur: 42, dinoTibia: 36, dinoHumerus: 32,
+    dinoJaw: 30, dinoVert: 26, dinoRib: 34, dinoPelvis: 38, dinoTail: 40,
+    trackSlab: 40,
   };
 
   const CARVER_SIZE = {
     venus: 15, neanderForm: 15, antler: 17, shabti: 21, cycladic: 23,
     dogu: 25, castHead: 27, bust: 31, anachronicBust: 31, beastStatue: 35,
-    coveredFace: 36, torso: 42, soldier: 45, crystalForm: 38, dinoSkull: 58,
-    colossal: 62, stele: 70,
+    coveredFace: 36, torso: 42, soldier: 45, crystalForm: 38, dinoSkull: 52,
+    dinoMount: 94, colossal: 62, stele: 70,
   };
 
   const PAINTER_SIZE = {
@@ -556,11 +598,19 @@
 
   function physical(a) {
     if (a._phys) return a._phys;
+    if (a.skeletonMount && S7.skeletons && S7.skeletons.byId[a.skeletonMount]) {
+      const kit = S7.skeletons.byId[a.skeletonMount];
+      return (a._phys = { h: kit.mountH, w: Math.round(kit.mountH * 1.4) + 36, monumental: true });
+    }
     const cu = C.byId[a.cultureId];
     let base;
-    if (a.kind === "object") base = OBJECT_SIZE[a.objectType] || 18;
-    else if (a.kind === "sculpture") base = CARVER_SIZE[(cu && cu.sculpture) ? cu.sculpture.carver : "bust"] || 30;
-    else base = PAINTER_SIZE[(cu && cu.painting) ? cu.painting.painter : "modern"] || 30;
+    if (a.skeletonPart && S7.skeletons && S7.skeletons.PARTS[a.skeletonPart])
+      base = S7.skeletons.PARTS[a.skeletonPart].size;
+    else if (a.kind === "object") base = OBJECT_SIZE[a.objectType] || 18;
+    else if (a.kind === "sculpture") {
+      if (a.skeletonPart === "skull") base = CARVER_SIZE.dinoSkull;
+      else base = CARVER_SIZE[(cu && cu.sculpture) ? cu.sculpture.carver : "bust"] || 30;
+    } else base = PAINTER_SIZE[(cu && cu.painting) ? cu.painting.painter : "modern"] || 30;
 
     /* Same seed, different stream: size must not shift if the text tables move. */
     const rng = S7.rng((a.seed ^ 0x2545f491) >>> 0);
@@ -587,17 +637,22 @@
   const spriteCache = new Map();
 
   function spriteFor(a) {
-    const key = a.seed + ":" + a.kind + ":" + (a.objectType || "") + ":" + a.cultureId;
+    const key = a.seed + ":" + a.kind + ":" + (a.objectType || "") + ":" + a.cultureId +
+      ":" + (a.skeletonPart || "") + ":" + (a.skeletonMount || "");
     let c = spriteCache.get(key);
     if (c) return c;
-    const culture = C.byId[a.cultureId];
-    /* Art uses its own stream so changing the text tables never changes a
-       sprite the player has already seen. */
+    const culture = C.byId[a.cultureId] || { sculpture: { carver: "bust", materials: ["bone"] } };
     const rng = S7.rng((a.seed ^ 0x9e3779b9) >>> 0);
     let B;
-    if (a.kind === "painting") B = S7.paintings.paint(rng, culture.painting);
-    else if (a.kind === "sculpture") B = S7.sculptures.carve(rng, culture.sculpture);
-    else B = S7.objects.make(rng, { object: a.objectType });
+    if (a.skeletonMount)
+      B = S7.sculptures.carve(rng, { carver: "dinoMount", materials: ["bone"] });
+    else if (a.kind === "painting") B = S7.paintings.paint(rng, culture.painting);
+    else if (a.kind === "sculpture") {
+      const carver = a.skeletonPart === "skull" ? "dinoSkull"
+        : (culture.sculpture && culture.sculpture.carver) || "bust";
+      const mats = (culture.sculpture && culture.sculpture.materials) || ["bone"];
+      B = S7.sculptures.carve(rng, { carver, materials: mats });
+    } else B = S7.objects.make(rng, { object: a.objectType });
     c = S7.raster.bake(B);
     if (spriteCache.size > 400) spriteCache.clear();
     spriteCache.set(key, c);

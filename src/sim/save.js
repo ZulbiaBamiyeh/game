@@ -18,6 +18,7 @@
       b: a.boon, disp: a.display !== false, ks: !!a.keystone,
       rm: a.room, sl: a.slot,
       nm: a.keystone ? a.name : undefined, nt: a.keystone ? a.notes : undefined,
+      sk: a.skeletonId, sp: a.skeletonPart,
     };
   }
 
@@ -26,6 +27,7 @@
       culture: p.c, kind: p.k, objectType: p.o,
       condition: p.cd, rarity: p.r,
       name: p.nm, notes: p.nt, keystone: p.ks,
+      skeletonId: p.sk, skeletonPart: p.sp,
     });
     a.no = p.n;
     a.display = p.disp !== false;
@@ -35,6 +37,18 @@
        or a save would silently change the player's build. */
     if (p.b) a.boon = p.b;
     if (p.m) a.material = p.m;
+    if (p.sk) a.skeletonId = p.sk;
+    if (p.sp) a.skeletonPart = p.sp;
+    /* Re-apply skeleton labels if the piece is a kit element. */
+    if (a.skeletonId && a.skeletonPart && S7.skeletons && !p.nm) {
+      const kit = S7.skeletons.byId[a.skeletonId];
+      const part = S7.skeletons.partDef(a.skeletonPart);
+      if (kit && part) {
+        a.name = kit.short + " " + part.label;
+        a.notes = "Element of a " + kit.name + " skeleton (" + part.label.toLowerCase() +
+          "). Collect every part to mount the complete " + kit.short.toLowerCase() + ".";
+      }
+    }
     return a;
   }
 

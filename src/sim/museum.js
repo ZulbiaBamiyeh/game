@@ -70,19 +70,31 @@
     for (const a of shown) {
       sig += a.significance;
       cultures.add(a.cultureId);
-      kinds.add(a.kind + (a.objectType || ""));
+      kinds.add(a.kind + (a.objectType || a.skeletonPart || ""));
       eras.add(S7.cultures.eraAt(a.depth).id);
       if (!best || a.significance > best.significance) best = a;
     }
+
+    /* Complete dinosaur mounts are the Hall's jackpot — assembled bone by bone. */
+    let skeletons = { bonus: 0, complete: [] };
+    if (S7.skeletons) {
+      skeletons = S7.skeletons.ratingBonus(S);
+      sig += skeletons.bonus;
+    }
+
     const cap = capacity(S);
-    const crowd = shown.length > cap ? Math.pow(cap / shown.length, 0.55) : 1;
+    /* Mounted skeletons are huge but should not count as capacity spam. */
+    const mountCount = skeletons.complete ? skeletons.complete.length : 0;
+    const capLoad = Math.max(0, shown.length);
+    const crowd = capLoad > cap ? Math.pow(cap / capLoad, 0.55) : 1;
 
     const breadthFactor = S.research.duplicate
       ? 1 + cultures.size * 0.14
       : 1 + cultures.size * 0.12;
-    const varietyFactor = 1 + kinds.size * 0.05 + eras.size * 0.06;
+    const varietyFactor = 1 + kinds.size * 0.05 + eras.size * 0.06
+      + mountCount * 0.35;
 
-    const renown = shown.length
+    const renown = (shown.length || mountCount)
       ? Math.pow(sig, 0.62) * breadthFactor * varietyFactor *
         softCap(S.mul.rating * (1 + S.add.rating), 25) * crowd
       : 0;
@@ -90,7 +102,7 @@
     return {
       shown, count: shown.length, sig, cap, crowd, best,
       cultures: cultures.size, kinds: kinds.size, eras: eras.size,
-      renown,
+      renown, skeletons,
       rating: 100 * renown / (renown + 6000),
     };
   }

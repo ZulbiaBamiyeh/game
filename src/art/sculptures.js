@@ -468,27 +468,112 @@
       outline(B, mat, 0);
     },
 
-    /* Dinosaur skull — big orbits, snout, teeth suggestion. Museum showpiece. */
+    /* Dinosaur skull — profile theropod: orbit, antorbital fenestra, serrated teeth. */
     dinoSkull(B, rng, mat) {
-      plinth(B, rng, "granite", 58);
-      /* cranium */
-      vol(B, 30, 28, 16, 14, mat, { t: 0.32, gain: 0.50, seed: rng.int(1, 99) });
-      /* snout */
-      shaft(B, 44, 26, 40, 8, 5, mat, { t: 0.30, gain: 0.44, seed: rng.int(1, 99) });
-      polyFill(B, [[48, 30], [58, 34], [48, 38]], () => tone(mat, 0.36));
-      /* orbit */
-      ellipseFill(B, 26, 24, 6, 5, (x, y, dx, dy, d) =>
-        d > 0.9 ? null : tone(mat, clamp(0.12 + d * 0.2, 0, 1)));
-      /* teeth along jaw */
-      for (let i = 0; i < 6; i++) {
-        const tx = 42 + i * 2.2;
-        polyFill(B, [[tx, 38], [tx + 1.5, 38], [tx + 0.7, 44]], () => tone(mat, 0.48));
+      const bone = mat === "bone" || mat === "chalk" ? mat : "bone";
+      plinth(B, rng, "granite", 60);
+      /* braincase */
+      vol(B, 22, 26, 11, 12, bone, { t: 0.36, gain: 0.52, seed: rng.int(1, 99) });
+      /* snout taper */
+      polyFill(B, [[28, 18], [56, 28], [54, 40], [30, 42], [20, 34]], (x, y) =>
+        tone(bone, clamp(0.34 + (56 - x) * 0.006 + fbm(x * 0.3, y * 0.25, 4) * 0.14, 0, 1)));
+      /* orbit — large, dark */
+      ellipseFill(B, 28, 24, 7, 6, (x, y, dx, dy, d) => {
+        if (d > 0.92) return null;
+        return tone(bone, clamp(0.08 + d * 0.18, 0, 1));
+      });
+      ellipseFill(B, 28, 24, 3, 2.5, () => tone("charcoal", 0.12));
+      /* antorbital fenestra */
+      ellipseFill(B, 40, 28, 4, 3.5, (x, y, dx, dy, d) =>
+        d > 0.9 ? null : tone(bone, clamp(0.10 + d * 0.16, 0, 1)));
+      /* naris */
+      ellipseFill(B, 52, 26, 2.5, 2, () => tone(bone, 0.12));
+      /* upper tooth row */
+      for (let i = 0; i < 9; i++) {
+        const tx = 34 + i * 2.4;
+        polyFill(B, [[tx, 40], [tx + 1.6, 40], [tx + 0.8, 46 + (i % 3)]], () => tone(bone, 0.55));
       }
-      /* jaw hinge */
-      vol(B, 34, 40, 10, 6, mat, { t: 0.28, gain: 0.4, seed: rng.int(1, 99) });
-      if (rng.chance(0.45)) fracture(B, rng, [rng.int(20, 40), rng.int(18, 32)], rng.int(4, 8));
-      burial(B, rng, mat);
-      outline(B, mat, 0);
+      /* lower jaw */
+      polyFill(B, [[30, 42], [54, 40], [52, 48], [28, 50]], (x, y) =>
+        tone(bone, clamp(0.32 + fbm(x * 0.3, y * 0.3, 5) * 0.14, 0, 1)));
+      for (let i = 0; i < 7; i++) {
+        const tx = 34 + i * 2.5;
+        polyFill(B, [[tx, 42], [tx + 1.4, 42], [tx + 0.7, 38]], () => tone(bone, 0.5));
+      }
+      /* zygomatic ridge */
+      lineTo(B, 24, 30, 48, 32, 1, () => tone(bone, 0.18));
+      if (rng.chance(0.35)) fracture(B, rng, [rng.int(24, 44), rng.int(20, 34)], rng.int(3, 6));
+      R.relight(B, bone, 2, -2);
+      burial(B, rng, bone);
+      outline(B, bone, 0);
+    },
+
+    /* Full mounted skeleton — side view on a steel armature. The Hall's prize. */
+    dinoMount(B, rng, mat) {
+      const bone = "bone";
+      const steel = "steel";
+      /* base plinth, wide */
+      rectFill(B, 6, 58, 58, 62, (x, y) =>
+        tone("granite", clamp(0.28 + (y === 58 ? 0.18 : 0) + fbm(x * 0.3, y * 0.4, 3) * 0.1, 0, 1)));
+      rectFill(B, 10, 56, 54, 58, (x, y) => tone("granite", 0.34));
+
+      /* armature posts */
+      for (const px of [18, 32, 46])
+        rectFill(B, px, 22, px + 1, 56, () => tone(steel, 0.4));
+
+      /* tail — cascading caudals */
+      for (let i = 0; i < 10; i++) {
+        const x = 48 + i * 1.3, y = 34 + i * 1.8, s = 3.2 - i * 0.18;
+        vol(B, x, y, s, s * 0.85, bone, { t: 0.40, gain: 0.42, seed: 2 + i });
+      }
+
+      /* pelvis */
+      vol(B, 34, 36, 8, 6, bone, { t: 0.38, gain: 0.48, seed: 11 });
+      polyFill(B, [[28, 34], [40, 34], [42, 42], [26, 42]], (x, y) =>
+        tone(bone, clamp(0.36 + fbm(x * 0.3, y * 0.3, 4) * 0.12, 0, 1)));
+
+      /* spine / ribcage */
+      for (let i = 0; i < 7; i++) {
+        const x = 18 + i * 2.4, y = 28 - Math.sin(i * 0.4) * 3;
+        vol(B, x, y, 2.4, 2.2, bone, { t: 0.42, gain: 0.4, seed: 20 + i });
+        /* ribs */
+        curveTo(B, x, y + 2, x - 1, y + 8, x + 2, y + 14, 0, () => tone(bone, 0.34));
+        curveTo(B, x, y + 2, x + 3, y + 7, x + 1, y + 13, 0, () => tone(bone, 0.30));
+      }
+
+      /* neck S-curve */
+      for (let i = 0; i < 6; i++) {
+        const t = i / 5;
+        const x = 16 - t * 6, y = 26 - t * 10;
+        vol(B, x, y, 2.6 - t * 0.3, 2.4, bone, { t: 0.42, gain: 0.4, seed: 30 + i });
+      }
+
+      /* skull */
+      polyFill(B, [[4, 10], [16, 12], [18, 20], [10, 22], [3, 16]], (x, y) =>
+        tone(bone, clamp(0.40 + fbm(x * 0.4, y * 0.4, 6) * 0.12, 0, 1)));
+      ellipseFill(B, 9, 14, 2.5, 2.2, () => tone(bone, 0.12));
+      for (let i = 0; i < 4; i++)
+        polyFill(B, [[12 + i * 1.3, 20], [13 + i * 1.3, 20], [12.5 + i * 1.3, 23]], () => tone(bone, 0.52));
+
+      /* forelimb (small) */
+      lineTo(B, 20, 32, 16, 40, 1, () => tone(bone, 0.38));
+      lineTo(B, 16, 40, 14, 46, 1, () => tone(bone, 0.36));
+      vol(B, 14, 47, 2, 1.5, bone, { t: 0.4, seed: 40 });
+
+      /* hindlimb — pillar */
+      shaft(B, 34, 40, 54, 3.5, 4, bone, { t: 0.38, gain: 0.44, seed: 41 });
+      vol(B, 34, 40, 4, 3, bone, { t: 0.4, seed: 42 });
+      vol(B, 34, 54, 5, 2.5, bone, { t: 0.38, seed: 43 });
+      /* second leg, slightly back */
+      shaft(B, 40, 42, 54, 3, 3.5, bone, { t: 0.32, gain: 0.38, seed: 44 });
+      vol(B, 40, 54, 4.5, 2.2, bone, { t: 0.34, seed: 45 });
+
+      /* feet */
+      for (const fx of [30, 34, 38, 42])
+        lineTo(B, fx, 54, fx + (fx < 36 ? -2 : 2), 58, 1, () => tone(bone, 0.36));
+
+      R.relight(B, bone, 1, -2);
+      outline(B, bone, 0);
     },
 
     /* Crystal cluster on a mineral base. */

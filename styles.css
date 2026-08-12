@@ -372,6 +372,13 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .boon.t3{border-color:var(--r-unique);background:#2c2210;box-shadow:0 0 0 1px #d9a03c22,0 0 18px #d9a03c1a}
 .boon.t3 .bv{color:var(--r-unique)}
 
+.skhead{
+  font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ochre-2);
+  margin:4px 0 6px;
+}
+.setrow.done .sn{color:var(--ochre)}
+.setrow.done .sbar>i{background:var(--ochre)}
+
 .eras{display:flex;flex-direction:column;gap:2px}
 .erarow{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;padding:4px 6px;
   border-left:2px solid var(--line);align-items:baseline}

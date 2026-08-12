@@ -50,11 +50,12 @@
 
     { depth: 520, culture: "cretaceous", kind: "sculpture",
       condition: "fine", rarity: "unique",
-      name: "Dinosaur skull, complete",
-      notes: "A theropod skull, mineralised, recovered from a packed void at five hundred and twenty metres. " +
-             "There is no river gravel, no bone bed, no natural context of any kind. It was wrapped, " +
-             "set upright, and covered. Somebody wanted a dinosaur in the collection.",
-      beat: "Below the human record the deposit holds <b>deep time on purpose</b>. This is a museum in the ground." },
+      skeletonId: "tyrant", skeletonPart: "skull",
+      name: "Tyrant skull",
+      notes: "The skull of a tyrant theropod, mineralised, recovered from a packed void at five hundred and " +
+             "twenty metres. There is no bone bed — it was wrapped, set upright, and covered. The rest of " +
+             "the skeleton is still in the deposit, element by element. Collect them all and the Hall can mount it.",
+      beat: "Below the human record the deposit holds <b>deep time on purpose</b> — a dinosaur, bone by bone." },
 
     { depth: 680, culture: "unattr_a", kind: "sculpture",
       condition: "excep", rarity: "unique",
@@ -151,9 +152,11 @@
 
   function mintFind(S, depth, opts) {
     S.accession++;
+    const heldSkeletons = S7.skeletons ? S7.skeletons.heldMap(S) : null;
     const a = S7.artifacts.makeArtifact(nextSeed(S), depth, Object.assign({
       condBonus: S.bonus.condition,
       rareBonus: S.bonus.rarity,
+      heldSkeletons,
     }, opts || {}));
     a.no = String(S.accession).padStart(3, "0");
     /* Later sites are richer ground — the deposits get better, not just bigger. */
@@ -298,6 +301,17 @@
     S.pending = null;
     log(S, "Item " + a.no + " accessioned — " + a.name.toLowerCase() + ". " +
            S7.boons.text(a.boon) + ".", "good");
+    if (a.skeletonId && S7.skeletons) {
+      const kit = S7.skeletons.byId[a.skeletonId];
+      const prog = S7.skeletons.progress(S).find((x) => x.kit.id === a.skeletonId);
+      if (kit && prog) {
+        if (prog.complete)
+          log(S, "<b>" + kit.mountName + " complete.</b> Every element recovered — " +
+                 "the Hall of Dinosaurs can mount it. Museum rating surges.", "warn");
+        else
+          log(S, kit.short + " skeleton: " + prog.have + " / " + prog.want + " elements.");
+      }
+    }
     if (a.keystone) {
       const k = KEYSTONES.find((x) => x.name === a.name);
       if (k) log(S, k.beat, "warn");

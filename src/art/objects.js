@@ -733,33 +733,170 @@
       outline(B, mat, 0);
     },
 
-    /* ---------- dinosaurs & fossils ---------------------------------------- */
+    /* ---------- dinosaurs — individual elements of a skeleton kit -------- */
 
     dinoTooth(B, rng) {
-      const mat = rng.pick(["bone", "stone", "chalk"]);
-      polyFill(B, [[32, 8], [42, 40], [32, 56], [22, 40]], (x, y) =>
-        tone(mat, clamp(0.42 + (32 - Math.abs(x - 32)) * 0.02 + fbm(x * 0.3, y * 0.2, 4) * 0.16, 0, 1)));
-      lineTo(B, 28, 20, 36, 20, 0, () => tone(mat, 0.18));
-      lineTo(B, 27, 30, 37, 30, 0, () => tone(mat, 0.14));
+      const mat = "bone";
+      /* recurved serrated crown */
+      polyFill(B, [[34, 6], [44, 28], [36, 56], [28, 54], [24, 30]], (x, y) =>
+        tone(mat, clamp(0.48 + (34 - Math.abs(x - 34)) * 0.015 + fbm(x * 0.35, y * 0.2, 4) * 0.12, 0, 1)));
+      /* serrations */
+      for (let i = 0; i < 10; i++) {
+        const y = 14 + i * 3.5;
+        put(B, 42 - i * 0.3, y, tone(mat, 0.2));
+        put(B, 26 + i * 0.2, y + 1, tone(mat, 0.22));
+      }
+      /* root */
+      rectFill(B, 30, 52, 38, 60, (x, y) => tone(mat, clamp(0.34 + fbm(x * 0.4, y * 0.3, 3) * 0.12, 0, 1)));
       outline(B, mat, 0);
     },
 
     dinoBone(B, rng) {
-      const mat = rng.pick(["bone", "stone"]);
-      /* long bone with knuckled ends */
-      rectFill(B, 28, 14, 36, 50, (x, y) =>
-        tone(mat, clamp(0.40 + Math.sin((x - 28) / 8 * Math.PI) * 0.3 + fbm(x * 0.4, y * 0.2, 3) * 0.14, 0, 1)));
-      ellipseFill(B, 32, 12, 12, 8, (x, y, dx, dy, d) =>
-        d > 0.95 ? null : tone(mat, clamp(0.44 + domeLight(dx, dy, 12) * 0.36, 0, 1)));
-      ellipseFill(B, 32, 52, 14, 9, (x, y, dx, dy, d) =>
-        d > 0.95 ? null : tone(mat, clamp(0.40 + domeLight(dx, dy, 14) * 0.36, 0, 1)));
+      /* generic long bone — femur-like */
+      OBJECTS.dinoFemur(B, rng);
+    },
+
+    dinoFemur(B, rng) {
+      const mat = "bone";
+      /* shaft */
+      for (let y = 16; y <= 48; y++) {
+        const k = (y - 16) / 32;
+        const w = 4.5 + Math.sin(k * Math.PI) * 1.2;
+        for (let x = Math.round(32 - w); x <= 32 + w; x++) {
+          const e = (x - (32 - w)) / (2 * w);
+          put(B, x, y, tone(mat, clamp(0.38 + Math.sin(e * Math.PI) * 0.28 + fbm(x * 0.4, y * 0.2, 3) * 0.1, 0, 1)));
+        }
+      }
+      /* proximal head */
+      ellipseFill(B, 30, 12, 10, 8, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.44 + domeLight(dx, dy, 10) * 0.4, 0, 1)));
+      ellipseFill(B, 38, 14, 5, 4, (x, y, dx, dy, d) =>
+        d > 0.9 ? null : tone(mat, clamp(0.40 + domeLight(dx, dy, 5) * 0.35, 0, 1)));
+      /* distal condyles */
+      ellipseFill(B, 28, 52, 7, 6, (x, y, dx, dy, d) =>
+        d > 0.92 ? null : tone(mat, clamp(0.42 + domeLight(dx, dy, 7) * 0.36, 0, 1)));
+      ellipseFill(B, 36, 52, 7, 6, (x, y, dx, dy, d) =>
+        d > 0.92 ? null : tone(mat, clamp(0.40 + domeLight(dx, dy, 7) * 0.36, 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    dinoTibia(B, rng) {
+      const mat = "bone";
+      for (let y = 14; y <= 50; y++) {
+        const k = (y - 14) / 36;
+        const w = 3.8 + (1 - k) * 1.5;
+        for (let x = Math.round(32 - w); x <= 32 + w; x++) {
+          const e = (x - (32 - w)) / (2 * w || 1);
+          put(B, x, y, tone(mat, clamp(0.40 + Math.sin(e * Math.PI) * 0.26 + fbm(x * 0.4, y * 0.2, 5) * 0.1, 0, 1)));
+        }
+      }
+      ellipseFill(B, 32, 12, 9, 6, (x, y, dx, dy, d) =>
+        d > 0.93 ? null : tone(mat, clamp(0.44 + domeLight(dx, dy, 9) * 0.36, 0, 1)));
+      ellipseFill(B, 32, 54, 8, 5, (x, y, dx, dy, d) =>
+        d > 0.93 ? null : tone(mat, clamp(0.42 + domeLight(dx, dy, 8) * 0.34, 0, 1)));
+      /* fibula suggestion */
+      lineTo(B, 38, 18, 40, 48, 1, () => tone(mat, 0.32));
+      outline(B, mat, 0);
+    },
+
+    dinoHumerus(B, rng) {
+      const mat = "bone";
+      for (let y = 16; y <= 48; y++) {
+        const w = 3.5 + Math.sin(((y - 16) / 32) * Math.PI) * 1.1;
+        for (let x = Math.round(32 - w); x <= 32 + w; x++) {
+          const e = (x - (32 - w)) / (2 * w || 1);
+          put(B, x, y, tone(mat, clamp(0.40 + Math.sin(e * Math.PI) * 0.26, 0, 1)));
+        }
+      }
+      ellipseFill(B, 32, 12, 8, 7, (x, y, dx, dy, d) =>
+        d > 0.93 ? null : tone(mat, clamp(0.44 + domeLight(dx, dy, 8) * 0.38, 0, 1)));
+      ellipseFill(B, 32, 52, 7, 5, (x, y, dx, dy, d) =>
+        d > 0.93 ? null : tone(mat, clamp(0.42 + domeLight(dx, dy, 7) * 0.34, 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    dinoJaw(B, rng) {
+      const mat = "bone";
+      polyFill(B, [[8, 28], [56, 22], [58, 34], [10, 42]], (x, y) =>
+        tone(mat, clamp(0.40 + fbm(x * 0.25, y * 0.3, 4) * 0.14 + (y < 30 ? 0.08 : 0), 0, 1)));
+      for (let i = 0; i < 10; i++) {
+        const tx = 16 + i * 4;
+        polyFill(B, [[tx, 26], [tx + 2, 26], [tx + 1, 20 + (i % 2)]], () => tone(mat, 0.55));
+      }
+      /* articular end */
+      ellipseFill(B, 12, 34, 6, 7, (x, y, dx, dy, d) =>
+        d > 0.92 ? null : tone(mat, clamp(0.38 + domeLight(dx, dy, 6) * 0.35, 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    dinoVert(B, rng) {
+      const mat = "bone";
+      /* centrum */
+      ellipseFill(B, 32, 36, 12, 10, (x, y, dx, dy, d) =>
+        d > 0.95 ? null : tone(mat, clamp(0.36 + domeLight(dx, dy, 12) * 0.4, 0, 1)));
+      /* neural canal */
+      ellipseFill(B, 32, 32, 3, 2.5, () => null);
+      /* neural spine */
+      rectFill(B, 30, 10, 34, 28, (x, y) =>
+        tone(mat, clamp(0.42 + Math.sin((x - 30) / 4 * Math.PI) * 0.28 + (10 - y + 28) * 0.004, 0, 1)));
+      /* transverse processes */
+      rectFill(B, 14, 30, 24, 34, (x, y) => tone(mat, 0.38));
+      rectFill(B, 40, 30, 50, 34, (x, y) => tone(mat, 0.38));
+      outline(B, mat, 0);
+    },
+
+    dinoRib(B, rng) {
+      const mat = "bone";
+      for (let i = 0; i < 5; i++) {
+        const x0 = 18 + i * 6;
+        curveTo(B, x0, 12, x0 - 4, 32, x0 + 2, 54, 1, () =>
+          tone(mat, clamp(0.40 + i * 0.02, 0, 1)));
+        curveTo(B, x0 + 1, 12, x0 - 2, 32, x0 + 3, 54, 0, () => tone(mat, 0.32));
+      }
+      /* head ends */
+      for (let i = 0; i < 5; i++)
+        ellipseFill(B, 18 + i * 6, 12, 2.5, 2.5, () => tone(mat, 0.48));
+      outline(B, mat, 0);
+    },
+
+    dinoPelvis(B, rng) {
+      const mat = "bone";
+      /* ilium */
+      polyFill(B, [[12, 18], [52, 16], [50, 32], [14, 34]], (x, y) =>
+        tone(mat, clamp(0.38 + fbm(x * 0.25, y * 0.25, 4) * 0.14, 0, 1)));
+      /* pubis / ischium */
+      polyFill(B, [[28, 32], [36, 32], [40, 54], [24, 54]], (x, y) =>
+        tone(mat, clamp(0.36 + fbm(x * 0.3, y * 0.3, 5) * 0.12, 0, 1)));
+      polyFill(B, [[22, 34], [28, 34], [20, 52], [14, 48]], (x, y) => tone(mat, 0.34));
+      polyFill(B, [[36, 34], [42, 34], [50, 48], [44, 52]], (x, y) => tone(mat, 0.34));
+      /* acetabulum */
+      ellipseFill(B, 32, 36, 5, 5, (x, y, dx, dy, d) =>
+        d > 0.85 ? null : tone(mat, clamp(0.14 + d * 0.2, 0, 1)));
+      outline(B, mat, 0);
+    },
+
+    dinoTail(B, rng) {
+      const mat = "bone";
+      for (let i = 0; i < 12; i++) {
+        const t = i / 11;
+        const x = 10 + i * 4, y = 28 + Math.sin(i * 0.45) * 6, s = 5 - t * 3.2;
+        ellipseFill(B, x, y, s, s * 0.85, (px, py, dx, dy, d) =>
+          d > 0.95 ? null : tone(mat, clamp(0.40 + domeLight(dx, dy, s) * 0.35, 0, 1)));
+        if (i < 11) lineTo(B, x + s * 0.5, y, x + 4 - s * 0.3, y + Math.sin((i + 1) * 0.45) * 6, 1, () => tone(mat, 0.32));
+      }
       outline(B, mat, 0);
     },
 
     dinoClaw(B, rng) {
-      const mat = rng.pick(["bone", "stone", "obsid"]);
-      polyFill(B, [[18, 20], [40, 12], [48, 28], [36, 50], [20, 44]], (x, y) =>
-        tone(mat, clamp(0.36 + fbm(x * 0.3, y * 0.25, 5) * 0.22 + (x > 36 ? 0.1 : 0), 0, 1)));
+      const mat = "bone";
+      /* strongly curved keratin sheath look */
+      polyFill(B, [[16, 36], [28, 14], [40, 10], [52, 22], [48, 36], [34, 48], [20, 46]], (x, y) =>
+        tone(mat, clamp(0.40 + fbm(x * 0.3, y * 0.25, 5) * 0.16 + (y < 20 ? 0.1 : 0), 0, 1)));
+      /* keratin edge */
+      lineTo(B, 28, 14, 40, 10, 1, () => tone(mat, 0.58));
+      lineTo(B, 40, 10, 52, 22, 1, () => tone(mat, 0.55));
+      /* tendon groove */
+      curveTo(B, 24, 36, 32, 28, 44, 30, 0, () => tone(mat, 0.18));
       outline(B, mat, 0);
     },
 

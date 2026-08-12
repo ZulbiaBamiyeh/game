@@ -197,17 +197,20 @@
     { id: "cretaceous", name: "Cretaceous assemblage", short: "Cretaceous", region: "deep time",
       period: "c. 145–66 Ma", eerie: 1, gallery: "dinosaurs",
       sculpture: { carver: "dinoSkull", materials: ["bone", "stone", "chalk"] }, sculptNoun: "Dinosaur skull",
-      objects: ["dinoTooth", "dinoBone", "dinoClaw", "eggFossil", "trackSlab"] },
+      objects: ["dinoTooth", "dinoBone", "dinoClaw", "dinoFemur", "dinoJaw", "dinoVert",
+                "dinoRib", "dinoPelvis", "dinoTail", "eggFossil", "trackSlab"] },
 
     { id: "jurassic", name: "Jurassic assemblage", short: "Jurassic", region: "deep time",
       period: "c. 201–145 Ma", eerie: 1, gallery: "dinosaurs",
       sculpture: { carver: "dinoSkull", materials: ["bone", "stone"] }, sculptNoun: "Predator skull",
-      objects: ["dinoTooth", "dinoBone", "dinoClaw", "ammonite", "fernFossil"] },
+      objects: ["dinoTooth", "dinoBone", "dinoClaw", "dinoFemur", "dinoTibia", "dinoHumerus",
+                "dinoJaw", "dinoVert", "dinoRib", "dinoPelvis", "dinoTail", "ammonite"] },
 
     { id: "triassic", name: "Triassic assemblage", short: "Triassic", region: "deep time",
       period: "c. 252–201 Ma", eerie: 1, gallery: "dinosaurs",
       sculpture: { carver: "dinoSkull", materials: ["bone", "stone"] }, sculptNoun: "Early reptile skull",
-      objects: ["dinoBone", "dinoTooth", "trackSlab", "fernFossil"] },
+      objects: ["dinoBone", "dinoTooth", "dinoFemur", "dinoVert", "dinoRib", "dinoPelvis",
+                "dinoTail", "trackSlab"] },
 
     { id: "paleozoic", name: "Paleozoic fossils", short: "Paleozoic", region: "deep time",
       period: "c. 541–252 Ma", eerie: 1, gallery: "fossils",

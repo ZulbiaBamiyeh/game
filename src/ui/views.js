@@ -278,20 +278,35 @@
     for (const b of $("galleries").querySelectorAll("[data-art]"))
       b.addEventListener("click", () => openArtifact(byNo.get(b.getAttribute("data-art"))));
 
-    /* Collections. Only traditions actually encountered get a row — thirty
-       identical "not yet encountered" tiles is not information. */
+    /* Collections. Skeleton mounts first, then culture form sets. */
+    let setsHtml = "";
+    if (S7.skeletons) {
+      const active = S7.skeletons.progress(S).filter((x) => x.have > 0 || x.complete);
+      if (active.length) {
+        setsHtml += '<div class="skhead">Dinosaur mounts · assemble bone by bone</div>';
+        for (const x of active) {
+          const pct = Math.round(100 * x.have / x.want);
+          setsHtml += '<div class="setrow' + (x.complete ? " done" : "") + '">' +
+            '<div class="sn">' + esc(x.kit.mountName) +
+            (x.complete ? " · complete" : "") + "</div>" +
+            '<div class="sp">' + x.have + " / " + x.want + " elements" +
+            (x.complete ? " · hall rating bonus" : "") + "</div>" +
+            '<div class="sbar"><i style="width:' + pct + '%"></i></div></div>';
+        }
+      }
+    }
     const allSets = M.setsFor(S);
     const sets = allSets.filter((x) => x.n > 0);
     const remaining = allSets.length - sets.length;
     sets.sort((a, b) => (b.have / b.want) - (a.have / a.want));
-    $("sets").innerHTML = sets.map((x) => {
+    setsHtml += sets.map((x) => {
       const pc = Math.round(100 * x.have / x.want);
       return '<div class="setrow' + (x.complete ? " done" : "") + '">' +
         '<div class="sn">' + esc(x.culture.name) + '</div>' +
         '<div class="sp">' + x.have + " / " + x.want + " forms · " + x.n + " held</div>" +
         '<div class="sbar"><i style="width:' + pc + '%"></i></div></div>';
-    }).join("") ||
-      '<p class="hint">Nothing accessioned yet.</p>';
+    }).join("") || (setsHtml ? "" : '<p class="hint">Nothing accessioned yet.</p>');
+    $("sets").innerHTML = setsHtml;
     const note = document.querySelector("#v-museum .panel:last-child .lblnote");
     if (note) note.textContent = remaining
       ? remaining + " tradition" + (remaining === 1 ? "" : "s") + " still unencountered"
