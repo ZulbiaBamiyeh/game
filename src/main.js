@@ -53,7 +53,17 @@
       b.classList.toggle("on", b.getAttribute("data-tab") === name);
     for (const id of ["site", "museum", "research", "log"])
       show("v-" + id, id === name);
+    if (name === "museum") S7.audio.enterMuseum(); else S7.audio.leaveMuseum();
     refreshAll();
+  }
+
+  /* ---------- sound toggle ---------------------------------------------------- */
+
+  function renderMuteButton() {
+    const b = $("btn-mute");
+    const on = S7.audio.isEnabled();
+    b.textContent = "Sound: " + (on ? "on" : "off");
+    b.classList.toggle("muted", !on);
   }
 
   /* ---------- purchases ------------------------------------------------------ */
@@ -459,6 +469,12 @@
         ? '<p class="caphint">Drag any piece to move it along the wall, or through a ' +
           'doorway into another room. Carry it to the edge to walk the building.</p>'
         : '<p class="caphint">Click a piece to read its label. Double-click for the full record.</p>';
+    });
+    S7.audio.init();
+    renderMuteButton();
+    $("btn-mute").addEventListener("click", () => {
+      S7.audio.setEnabled(!S7.audio.isEnabled());
+      renderMuteButton();
     });
     $("btn-menu").addEventListener("click", openMenu);
     $("mn-close").addEventListener("click", () => show("m-menu", false));

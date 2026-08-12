@@ -82,6 +82,7 @@ button.ghost{
   padding:5px 10px;cursor:pointer;
 }
 button.ghost:hover{border-color:var(--ochre-2);color:var(--ochre)}
+button.ghost.muted{color:var(--ink-3);opacity:.65}
 
 /* ---------- stat bar ------------------------------------------------------ */
 
