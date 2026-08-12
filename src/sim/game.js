@@ -205,6 +205,7 @@
   function mintKeystone(S, k) {
     return mintFind(S, k.depth, {
       culture: k.culture, kind: k.kind, objectType: k.objectType,
+      skeletonId: k.skeletonId, skeletonPart: k.skeletonPart,
       condition: k.condition, rarity: k.rarity,
       name: k.name, notes: k.notes, keystone: true,
     });
