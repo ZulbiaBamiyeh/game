@@ -130,9 +130,14 @@
     const A = S.active;
     if (!A || A.filed) return;
     const p = G.exposure(A);
+    const mult = G.multiplierFor(p);
+    /* Preview what a correct filing right now would pay. */
+    const preview = Math.max(1, Math.round(
+      G.understandingBase(A.artifact) * mult *
+      S.mul.understanding * (1 + S.add.understanding)));
     $("i-prompt").textContent = describe(A.artifact);
-    $("i-reveal").textContent = Math.round(p * 100) + "% exposed · filing now is worth " +
-      G.multiplierFor(p) + "× Understanding";
+    $("i-reveal").textContent = Math.round(p * 100) + "% exposed · correct reading now ≈ " +
+      V.fmt(preview) + " Understanding (" + mult + "×)";
     let readings = A.artifact.readings;
     if (S.research.typology && readings[readings.length - 1].ok) {
       /* A typology means the correct reading is never the last one you read. */
@@ -164,15 +169,19 @@
     const p = S.pending;
     if (!p) return;
     const a = p.artifact;
+    const uLine = '<div class="uaward"><span>Understanding</span><b>+' +
+      V.fmt(p.understanding) + '</b></div>';
     let v;
     if (p.filedIdx === null || p.filedIdx < 0)
-      v = '<div class="verd">No interpretation was filed. The record is complete but unexamined.</div>';
+      v = '<div class="verd">No interpretation was filed. The find still teaches something ' +
+          'from being lifted and catalogued — file next time for a larger award.</div>' + uLine;
     else if (p.filedOk)
       v = '<div class="verd good">Your reading holds. Filed at ' + Math.round(p.filedAt * 100) +
-          '% exposure — ' + p.mult + '× award, ' + V.fmt(p.understanding) + ' Understanding.</div>';
+          '% exposure — ' + p.mult + '× award.</div>' + uLine;
     else
-      v = '<div class="verd bad">Your reading does not survive full exposure. It stays in the record. ' +
-          'Correct: ' + V.esc(a.readings.filter((o) => o.ok)[0].t.toLowerCase()) + '.</div>';
+      v = '<div class="verd bad">Your reading does not survive full exposure. Partial credit ' +
+          'for the attempt. Correct: ' +
+          V.esc(a.readings.filter((o) => o.ok)[0].t.toLowerCase()) + '.</div>' + uLine;
 
     $("f-verdict").innerHTML = v;
     $("f-record").innerHTML = V.recordHTML(S, a);
@@ -217,6 +226,9 @@
     html += '<div class="offrow"><span>Funding banked</span><span>' + V.fmt(report.funds) + '</span></div>';
     html += '<div class="offrow"><span>Descended</span><span>' + report.depth.toFixed(1) + ' m</span></div>';
     html += '<div class="offrow"><span>Lifted and accessioned</span><span>' + report.finds.length + '</span></div>';
+    if (report.understanding)
+      html += '<div class="offrow"><span>Understanding from finds</span><span>+' +
+        V.fmt(report.understanding) + '</span></div>';
     if (report.finds.length) {
       html += '<div class="offgrid">' + report.finds.slice(0, 24).map((a) =>
         '<canvas width="64" height="64" data-rec="' + a.no + '"></canvas>').join("") + '</div>';
@@ -380,30 +392,57 @@
     $("gal-room").textContent = here ? here.era.name : "—";
     $("gal-period").textContent = here && here.era.period ? here.era.period : "";
 
-    /* Named room strip — much easier than tiny dots once the museum has wings. */
+    /* Floor switcher */
+    const floorsEl = $("gal-floors");
+    if (floorsEl) {
+      const maxF = rooms.reduce((m, r) => Math.max(m, r.floor || 0), 0);
+      const sigF = String(maxF);
+      if (floorsEl.dataset.sig !== sigF) {
+        floorsEl.dataset.sig = sigF;
+        floorsEl.innerHTML = "";
+        if (maxF > 0) {
+          for (let f = maxF; f >= 0; f--) {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "galfloor";
+            b.textContent = f === 0 ? "Ground" : f === 1 ? "Upper" : "Floor " + f;
+            b.addEventListener("click", () => S7.galleryView.goToFloor(f));
+            floorsEl.appendChild(b);
+          }
+        }
+      }
+      const hereF = here ? (here.floor || 0) : 0;
+      floorsEl.querySelectorAll(".galfloor").forEach((b, i, arr) => {
+        const f = maxF - i;
+        b.classList.toggle("on", f === hereF);
+      });
+    }
+
+    /* Compact room chips — no dropdown. */
     const map = $("gal-map");
-    const jump = $("gal-jump");
-    const sig = rooms.map((r) => r.era.id + ":" + (r.exhibits ? r.exhibits.length : 0)).join("|");
+    const sig = rooms.map((r) => r.era.id + ":" + (r.floor || 0) + ":" +
+      (r.exhibits ? r.exhibits.length : 0)).join("|");
     if (map.dataset.sig !== sig) {
       map.dataset.sig = sig;
       map.innerHTML = "";
-      jump.innerHTML = "";
       rooms.forEach((r, i) => {
         const n = r.exhibits ? r.exhibits.length : 0;
         const label = (r.era.short || r.era.name || "Room").replace(/ horizon$/i, "");
         const chip = document.createElement("button");
         chip.type = "button";
-        chip.className = "galchip" + (r.featured ? " featured" : "") + (r.foyer ? " foyer" : "");
+        chip.className = "galchip" +
+          (r.featured ? " featured" : "") +
+          (r.foyer ? " foyer" : "") +
+          (r.shop || r.cafe ? " amenity" : "") +
+          (r.stairs ? " stairs" : "");
         chip.innerHTML = "<b>" + V.esc(label) + "</b>" +
-          (n ? "<span>" + n + "</span>" : r.foyer || r.amenity ? "" : "<span>—</span>");
-        chip.title = r.era.name + (r.era.period ? " · " + r.era.period : "");
+          (n ? "<span>" + n + "</span>" :
+            r.foyer || r.amenity || r.stairs ? "<span>" +
+              (r.floor ? "↑" : "·") + "</span>" : "<span>—</span>");
+        chip.title = r.era.name + (r.era.period ? " · " + r.era.period : "") +
+          (r.floor ? " · upper floor" : "");
         chip.addEventListener("click", () => S7.galleryView.goToRoom(i));
         map.appendChild(chip);
-
-        const opt = document.createElement("option");
-        opt.value = String(i);
-        opt.textContent = r.era.name + (n ? " (" + n + ")" : "");
-        jump.appendChild(opt);
       });
     }
     const chips = map.querySelectorAll(".galchip");
@@ -413,7 +452,6 @@
     if (here) {
       const hi = rooms.indexOf(here);
       if (hi >= 0) {
-        jump.value = String(hi);
         const onChip = chips[hi];
         if (onChip && onChip.scrollIntoView)
           onChip.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -537,12 +575,6 @@
     S7.galleryView.init($("c-gallery"), {
       onOpen: openArtifact,
       onSelect: showCaption,
-      onMove: (artifact, roomId, index) => {
-        S7.visitors.place(S, artifact, roomId, index);
-        S7.visitors.reseat(crowd);
-        G.log(S, "Rehung item " + artifact.no + " — " +
-                 (S7.cultures.byId[artifact.cultureId] || { name: "?" }).name + ".");
-      },
     });
     crowd = S7.visitors.create(S.seed ^ 0x5bf03635);
 
@@ -571,21 +603,6 @@
     $("shaft-recenter").addEventListener("click", () => S7.shaftView.recenter());
     $("gal-prev").addEventListener("click", () => S7.galleryView.nudge(-1));
     $("gal-next").addEventListener("click", () => S7.galleryView.nudge(1));
-    $("gal-jump").addEventListener("change", (e) => {
-      const i = parseInt(e.target.value, 10);
-      if (!isNaN(i)) S7.galleryView.goToRoom(i);
-    });
-    $("gal-arrange").addEventListener("click", () => {
-      const on = !S7.galleryView.isArranging();
-      S7.galleryView.setArrange(on);
-      $("gal-arrange").classList.toggle("on", on);
-      $("gal-arrange").textContent = on ? "Done" : "Rehang";
-      if (on) showCaption(null);
-      $("gal-caption").innerHTML = on
-        ? '<p class="caphint">Drag any piece to move it along the wall, or through a ' +
-          'doorway into another room. Carry it to the edge to walk the building.</p>'
-        : '<p class="caphint">Click a piece to read its label. Double-click for the full record.</p>';
-    });
     S7.audio.init();
     renderMuteButton();
     $("btn-mute").addEventListener("click", () => {

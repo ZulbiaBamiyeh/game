@@ -150,13 +150,53 @@
     return (visitorsPerDay(S, sv) / OPEN_MINUTES) * (arrivalShape(S.minute) / SHAPE_MEAN);
   }
 
-  /* What each visitor leaves behind beyond the ticket: postcards, a coffee,
-     the occasional book nobody finishes. */
+  /* Small till extras always on: postcards at the desk, a leaflet rack. */
+  function baseExtra(S, sv) {
+    const rating = Math.min(1, Math.max(0, sv.rating) / 100);
+    return (0.35 + 0.9 * rating) *
+      softCap(S.mul.spend * (1 + S.add.spend), 1.8);
+  }
+
+  /* Gift shop basket — only if the shop room exists. Scales with level. */
+  function shopSpend(S, sv) {
+    const lvl = S.up.shop || 0;
+    if (lvl <= 0) return 0;
+    const rating = Math.min(1, Math.max(0, sv.rating) / 100);
+    return (1.4 + lvl * 0.45 + 1.6 * rating) *
+      softCap(S.mul.spend * (1 + S.add.spend), 2.6);
+  }
+
+  /* Café order — tea and cake. Dwell upgrades make people linger and order more. */
+  function cafeSpend(S, sv) {
+    const lvl = S.up.cafe || 0;
+    if (lvl <= 0) return 0;
+    const rating = Math.min(1, Math.max(0, sv.rating) / 100);
+    return (2.0 + lvl * 0.55 + 1.8 * rating) *
+      softCap(S.mul.spend * (1 + S.add.spend), 2.6) *
+      softCap(S.mul.dwell * (1 + S.add.dwell), 1.6);
+  }
+
+  /* Chance a given visitor uses each amenity (expected value when the crowd
+     is not being walked on the museum tab). */
+  function amenityRates(S) {
+    const shopLvl = S.up.shop || 0;
+    const cafeLvl = S.up.cafe || 0;
+    return {
+      shop: shopLvl > 0 ? Math.min(0.72, 0.32 + shopLvl * 0.028) : 0,
+      cafe: cafeLvl > 0 ? Math.min(0.65, 0.26 + cafeLvl * 0.025) : 0,
+    };
+  }
+
+  function amenityExpected(S, sv) {
+    const r = amenityRates(S);
+    const shop = r.shop * shopSpend(S, sv);
+    const cafe = r.cafe * cafeSpend(S, sv);
+    return { shop, cafe, total: shop + cafe };
+  }
+
+  /* Full secondary take per visitor for projections and offline days. */
   function secondarySpend(S, sv) {
-    const base = 0.8 + 2.2 * Math.min(1, Math.max(0, sv.rating) / 100);
-    return base *
-      softCap(S.mul.spend * (1 + S.add.spend), 2.4) *
-      softCap(S.mul.dwell * (1 + S.add.dwell), 1.5);
+    return baseExtra(S, sv) + amenityExpected(S, sv).total;
   }
 
   const perVisitor = (S, sv) => S.admission + secondarySpend(S, sv);
@@ -176,7 +216,15 @@
      one visitor at a time. */
   function projectedDay(S, sv) {
     const v = visitorsPerDay(S, sv);
-    return { visitors: v, gate: v * S.admission, extra: v * secondarySpend(S, sv) };
+    const amen = amenityExpected(S, sv);
+    return {
+      visitors: v,
+      gate: v * S.admission,
+      extra: v * secondarySpend(S, sv),
+      shop: v * amen.shop,
+      cafe: v * amen.cafe,
+      base: v * baseExtra(S, sv),
+    };
   }
 
   const stars = (rating) => rating / 20;
@@ -218,6 +266,7 @@
     isOpen, clockRate, clockText, arrivalShape,
     displayed, capacity, survey, softCap,
     suggestedPrice, priceFactor, visitorsPerDay, arrivalRate, PEAK_DAY,
+    baseExtra, shopSpend, cafeSpend, amenityRates, amenityExpected,
     secondarySpend, perVisitor, standingIncome, projectedDay, incomeRate,
     stars, verdict, setsFor,
   };

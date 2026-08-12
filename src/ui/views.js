@@ -129,7 +129,8 @@
       (nextRes
         ? (uHave >= uNeed
           ? "Ready to buy: " + esc(nextRes.name) + "."
-          : fmt(Math.max(0, uNeed - uHave)) + " more to unlock the next line.")
+          : fmt(Math.max(0, uNeed - uHave)) + " more to unlock the next line. " +
+            "File interpretations while excavating to earn Understanding.")
         : "Every research line is held. The programme is complete.") +
       "</p></div>";
 
@@ -340,15 +341,17 @@
       '</div>' +
       '<div class="tillbook">' +
         '<div><span>Today</span><b>' + Math.round(today.visitors) + '</b> in · ' +
-          fmt(today.gate) + ' gate · ' + fmt(today.extra) + ' shop</div>' +
+          fmt(today.gate) + ' gate</div>' +
+        '<div><span>Gift shop</span><b>' + fmt(today.shop || 0) + '</b></div>' +
+        '<div><span>Café</span><b>' + fmt(today.cafe || 0) + '</b></div>' +
         (y ? '<div><span>Day ' + y.day + '</span><b>' + Math.round(y.visitors) + '</b> in · ' +
              fmt(y.gate + y.extra) + ' total</div>'
            : '<div><span>Yesterday</span>no trading yet</div>') +
         '<div class="wide"><span>Grant</span><b>' + fmt(S7.state.grantRate(S)) + '/s</b> · set on ' +
           Math.round(S7.state.attendance(S)) + ' a day</div>' +
       '</div>' +
-      '<p class="hint">The Institute funds you on last fortnight\'s attendance, so a ' +
-      'thin gate costs you twice. A dear ticket takes more per head and less of both.</p>' +
+      '<p class="hint">Tickets at the door. Gift shop and café take money when ' +
+      'visitors walk into those rooms. The Institute grant follows attendance.</p>' +
       (S.history.length > 1 ? historyStrip(S) : "");
   }
 

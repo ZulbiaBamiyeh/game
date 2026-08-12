@@ -260,6 +260,41 @@
   /* Filing early is the risk: fewer pixels, more Understanding. */
   const multiplierFor = (p) => (p < 0.25 ? 4 : p < 0.45 ? 3 : p < 0.70 ? 2 : 1);
 
+  /* How much a find teaches, before filing skill is applied.
+     Significance already folds depth, rarity, and condition — use it as the
+     main lever so an important piece teaches more than a bottle-cap. Floor so
+     every lift is worth something. */
+  function understandingBase(artifact) {
+    const sig = artifact.significance || 0;
+    return Math.max(6, 5 + sig * 0.65 + artifact.depth * 0.04);
+  }
+
+  /* Factor from how the player handled the dig.
+     - Correct early: up to 4×
+     - Correct late: 1×
+     - Wrong: half the exposure mult (still worth trying)
+     - No file / withheld: 0.45× baseline so lifting the thing still teaches */
+  function understandingFactor(A) {
+    const filed = A.filedIdx !== null && A.filedIdx !== undefined && A.filedIdx >= 0;
+    if (!filed) return 0.45;
+    const mult = multiplierFor(A.filedAt || 1);
+    if (A.filedOk) return mult;
+    return mult * 0.5;
+  }
+
+  function understandingAward(S, A) {
+    const raw = understandingBase(A.artifact) * understandingFactor(A) *
+      S.mul.understanding * (1 + S.add.understanding);
+    return Math.max(1, Math.round(raw));
+  }
+
+  /* Offline / crew digs: partial Understanding, no filing bonus. */
+  function understandingOffline(S, artifact) {
+    const raw = understandingBase(artifact) * 0.4 *
+      S.mul.understanding * (1 + S.add.understanding);
+    return Math.max(1, Math.round(raw));
+  }
+
   function fileInterpretation(S, idx) {
     const A = S.active;
     if (!A || A.filed) return;
@@ -279,11 +314,14 @@
   function finishDig(S) {
     const A = S.active;
     if (!A) return null;
-    const mult = A.filedIdx !== null && A.filedIdx >= 0 ? multiplierFor(A.filedAt) : 0;
-    const base = (3 + A.artifact.depth * 0.05) * A.artifact.condition.mult * A.artifact.rarity.mult;
-    const und = Math.round(base * (A.filedOk ? mult : mult * 0.35) *
-                           S.mul.understanding * (1 + S.add.understanding));
-    S.pending = { artifact: A.artifact, understanding: und, mult, filedOk: A.filedOk, filedIdx: A.filedIdx, filedAt: A.filedAt };
+    const filed = A.filedIdx !== null && A.filedIdx !== undefined && A.filedIdx >= 0;
+    const mult = filed ? multiplierFor(A.filedAt) : 0;
+    const und = understandingAward(S, A);
+    S.pending = {
+      artifact: A.artifact, understanding: und, mult,
+      filedOk: A.filedOk, filedIdx: A.filedIdx, filedAt: A.filedAt,
+      factor: understandingFactor(A),
+    };
     S.active = null;
     return S.pending;
   }
@@ -300,8 +338,11 @@
     S.collection.push(a);
     S.stats.accessioned++;
     S.pending = null;
+    const uBit = p.understanding > 0
+      ? " <b>+" + Math.round(p.understanding) + " Understanding</b>."
+      : "";
     log(S, "Item " + a.no + " accessioned — " + a.name.toLowerCase() + ". " +
-           S7.boons.text(a.boon) + ".", "good");
+           S7.boons.text(a.boon) + "." + uBit, "good");
     if (a.skeletonId && S7.skeletons) {
       const kit = S7.skeletons.byId[a.skeletonId];
       const prog = S7.skeletons.progress(S).find((x) => x.kit.id === a.skeletonId);
@@ -326,30 +367,56 @@
      money enters the game — there is no continuous income trickle any more. */
 
   function admit(S, sv) {
-    const extra = S7.museum.secondarySpend(S, sv);
+    /* Ticket + desk extras now. Shop and café money arrives when visitors
+       actually use those rooms (museum tab), or as expected value when the
+       crowd is not being simulated. */
+    const base = S7.museum.baseExtra(S, sv);
+    let amenShop = 0, amenCafe = 0;
+    if (S.tab !== "museum") {
+      const amen = S7.museum.amenityExpected(S, sv);
+      amenShop = amen.shop;
+      amenCafe = amen.cafe;
+    }
+    const extra = base + amenShop + amenCafe;
     S.funds += S.admission + extra;
     S.today.visitors += 1;
     S.today.gate += S.admission;
     S.today.extra += extra;
+    S.today.shop = (S.today.shop || 0) + amenShop;
+    S.today.cafe = (S.today.cafe || 0) + amenCafe;
     S.stats.visitorsTotal += 1;
     S.stats.gateTotal += S.admission;
     S.stats.earned += S.admission + extra;
-    /* The gallery walks one of these in through the front door when it can keep
-       up; the queue is capped so a busy day does not stack up thousands of
-       unwalked arrivals. */
     if (S.pendingArrivals < 40) S.pendingArrivals++;
+  }
+
+  /* Live amenity sale — called from the crowd when someone buys in a room. */
+  function amenitySale(S, amount, kind) {
+    if (!(amount > 0)) return;
+    S.funds += amount;
+    S.today.extra += amount;
+    if (kind === "shop") S.today.shop = (S.today.shop || 0) + amount;
+    else if (kind === "cafe") S.today.cafe = (S.today.cafe || 0) + amount;
+    S.stats.earned += amount;
   }
 
   function closeBooks(S) {
     const t = S.today;
-    S.yesterday = { day: S.day, visitors: t.visitors, gate: t.gate, extra: t.extra };
+    S.yesterday = {
+      day: S.day, visitors: t.visitors, gate: t.gate, extra: t.extra,
+      shop: t.shop || 0, cafe: t.cafe || 0,
+    };
     S.history.push(S.yesterday);
     if (S.history.length > 14) S.history.shift();
     S.stats.bestDay = Math.max(S.stats.bestDay || 0, t.gate + t.extra);
-    if (t.visitors > 0)
+    if (t.visitors > 0) {
+      const shopBit = (t.shop || 0) > 0.5 ? ", " + Math.round(t.shop) + " gift shop" : "";
+      const cafeBit = (t.cafe || 0) > 0.5 ? ", " + Math.round(t.cafe) + " café" : "";
       log(S, "<b>Day " + S.day + " closed.</b> " + Math.round(t.visitors) +
-             " through the door — " + Math.round(t.gate) + " on admissions, " +
-             Math.round(t.extra) + " in the shop and café.", "good");
+             " through the door — " + Math.round(t.gate) + " admissions" +
+             shopBit + cafeBit +
+             (shopBit || cafeBit ? "" : ", " + Math.round(t.extra) + " extras") + ".", "good");
+    }
   }
 
   /* The museum clock, the door, and the till. Returns the survey so the caller
@@ -376,7 +443,7 @@
     const nowOpen = S7.museum.isOpen(S);
     if (wasOpen && !nowOpen) closeBooks(S);
     if (!wasOpen && nowOpen) {
-      S.today = { visitors: 0, gate: 0, extra: 0 };
+      S.today = { visitors: 0, gate: 0, extra: 0, shop: 0, cafe: 0 };
       S.arrivalAcc = 0;
       if (sv.count > 0) log(S, "Day " + S.day + ". Doors open at nine.");
     }
@@ -486,6 +553,10 @@
         S7.boons.apply(S, a.boon);
         S.collection.push(a);
         S.stats.accessioned++;
+        /* Crew digs still teach something — less than a filed reading. */
+        const u = understandingOffline(S, a);
+        S.understanding += u;
+        report.understanding = (report.understanding || 0) + u;
         report.finds.push(a);
       }
     }
@@ -497,11 +568,16 @@
     /* Move the clock on so the museum does not resume mid-afternoon on a day
        that finished hours ago. */
     S.day += Math.floor(report.days);
-    S.today = { visitors: 0, gate: 0, extra: 0 };
+    S.today = { visitors: 0, gate: 0, extra: 0, shop: 0, cafe: 0 };
     S.minute = S7.museum.OPEN_AT - 5;
-    if (report.finds.length)
+    if (report.finds.length) {
+      const uBit = report.understanding
+        ? " (+" + Math.round(report.understanding) + " Understanding from the finds)"
+        : "";
       log(S, "While the site was unattended the crew lifted and accessioned " +
-             report.finds.length + " item" + (report.finds.length === 1 ? "" : "s") + ".");
+             report.finds.length + " item" + (report.finds.length === 1 ? "" : "s") +
+             uBit + ".");
+    }
     checkMilestones(S);
     return report;
   }
@@ -509,8 +585,9 @@
   S7.game = {
     CELL, GRID, KEYSTONES, MILESTONES,
     SITE_NAMES, siteName, canOpenNewSite, openNewSite,
-    admit, closeBooks, runMuseum,
+    admit, amenitySale, closeBooks, runMuseum,
     log, checkMilestones, mintFind, beginDig, brush, exposure, multiplierFor,
+    understandingBase, understandingFactor, understandingAward, understandingOffline,
     fileInterpretation, finishDig, accession, step, catchUp,
   };
 })(window.S7 = window.S7 || {});

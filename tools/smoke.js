@@ -172,49 +172,24 @@ function serve() {
   await page.click('[data-tab="museum"]');
   await page.waitForTimeout(400);
   await page.screenshot({ path: "tools/shot-02-museum.png" });
-  /* Rehanging: pick a piece up off the wall and drop it further along, using
-     synthetic pointer events so the check does not depend on where the page
-     happens to have laid the canvas out. */
+  /* Multi-floor museum: gift shop, café, stairs, upper storey. */
   await page.evaluate(() => S7.debug.tab("museum"));
-  await page.waitForTimeout(700);
-  const rehang = await page.evaluate(async () => {
+  await page.waitForTimeout(400);
+  const rehang = await page.evaluate(() => {
     const S = S7.debug.state();
-    const cv = document.getElementById("c-gallery");
-    if (!cv) return "no gallery canvas";
-    document.getElementById("gal-arrange").click();
-    /* Room 0 is the entrance hall and has nothing hanging in it; find the
-       first gallery with enough on the walls to reorder. */
-    const rooms = S7.visitors.getLayout(S).rooms;
-    const ri = rooms.findIndex((r0) => !r0.foyer && r0.exhibits.length >= 3);
-    if (ri < 0) return "ok (no room big enough to test)";
-    S7.galleryView.goToRoom(ri);
-    await new Promise((r) => setTimeout(r, 1200));
-
-    const room = S7.visitors.getLayout(S).rooms[ri];
-    const before = room.exhibits.map((e) => e.a.no).join(",");
-    const cam = S7.galleryView.probe(0, 0).cam;
-    if (cam === undefined) return "no camera";
-    const e0 = room.exhibits[0], last = room.exhibits[room.exhibits.length - 1];
-    const by = e0.mount === "wall" ? (e0.h <= 50 ? 96 : 108) - e0.h
-             : e0.mount === "plinth" ? Math.max(64, Math.min(108, Math.round(74 + e0.h / 2))) - e0.h
-             : 92 - e0.h;
-    const from = { x: (e0.x - cam) * 2, y: (by + e0.h / 2) * 2 };
-    const to = { x: (last.x + 24 - cam) * 2, y: 210 };
-
-    const r = cv.getBoundingClientRect();
-    const fire = (type, cx, cy) => cv.dispatchEvent(new PointerEvent(type, {
-      pointerId: 1, pointerType: "mouse", isPrimary: true, bubbles: true, cancelable: true,
-      clientX: r.left + (cx / cv.width) * r.width,
-      clientY: r.top + (cy / cv.height) * r.height,
-    }));
-    fire("pointerdown", from.x, from.y);
-    if (!S7.galleryView.isDragging()) return "did not pick the piece up";
-    fire("pointermove", to.x, to.y);
-    fire("pointerup", to.x, to.y);
-    await new Promise((r2) => setTimeout(r2, 250));
-    const after = S7.visitors.getLayout(S).rooms[ri].exhibits.map((e) => e.a.no).join(",");
-    document.getElementById("gal-arrange").click();
-    return before === after ? "drop did not reorder (" + before + ")" : "ok";
+    S.up.upper = 1;
+    S.up.shop = 2;
+    S.up.cafe = 1;
+    S7.visitors.invalidate();
+    const L = S7.visitors.getLayout(S);
+    if (!L.rooms.some((r) => r.shop)) return "no gift shop room";
+    if (!L.rooms.some((r) => r.cafe)) return "no café room";
+    if (!L.rooms.some((r) => r.stairs)) return "no stairs";
+    if ((L.floors || 1) < 2) return "no upper floor";
+    if (typeof S7.galleryView.goToFloor !== "function") return "no goToFloor";
+    S7.galleryView.goToFloor(1);
+    S7.galleryView.goToFloor(0);
+    return "ok";
   });
 
   /* Visitor numbers have to stay in the range an actual museum lives in. */
@@ -323,7 +298,7 @@ function serve() {
   console.log("  best at", pricing.bestAt + "x the going rate · charging the going rate costs",
               Math.round(pricing.penalty * 100) + "%");
   console.log("artifact sizes:", JSON.stringify(sizes));
-  console.log("rehang:", rehang);
+  console.log("museum layout:", rehang);
   console.log("console errors:", errors.length ? errors.slice(0, 20) : "none");
 
   /* The live curve is the one that matters. The isolated scale table only

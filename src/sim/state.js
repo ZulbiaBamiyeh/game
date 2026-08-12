@@ -29,7 +29,7 @@
       admission: 4,           /* what it costs to get in */
       arrivalAcc: 0,          /* fractional arrivals carried between ticks */
       pendingArrivals: 0,     /* admitted but not yet drawn walking in */
-      today: { visitors: 0, gate: 0, extra: 0 },
+      today: { visitors: 0, gate: 0, extra: 0, shop: 0, cafe: 0 },
       yesterday: null,
       history: [],            /* last 14 days, for the takings strip */
 

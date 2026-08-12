@@ -69,7 +69,7 @@
           <div class="stam" id="stam"></div>
           <button id="btn-interpret" class="action" type="button" hidden>
             <span class="bt">File an interpretation</span>
-            <span class="bd">Filing earlier is worth more Understanding</span>
+            <span class="bd">This is how you earn Understanding — earlier is worth more</span>
           </button>
         </div>
       </div>
@@ -89,20 +89,17 @@
     <!-- ================= MUSEUM ================= -->
     <section id="v-museum" class="view" hidden>
       <div class="panel fullwidth gallerypanel">
-        <div class="lbl">On the floor <span class="lblnote" id="gal-crowd"></span></div>
+        <div class="lbl">The museum <span class="lblnote" id="gal-crowd"></span></div>
         <div class="galwrap">
           <canvas id="c-gallery"></canvas>
-          <button class="galnav l" id="gal-prev" type="button" aria-label="Previous room">‹</button>
-          <button class="galnav r" id="gal-next" type="button" aria-label="Next room">›</button>
+          <button class="galnav l" id="gal-prev" type="button" aria-label="Pan left">‹</button>
+          <button class="galnav r" id="gal-next" type="button" aria-label="Pan right">›</button>
+          <div class="galfloors" id="gal-floors" role="navigation" aria-label="Floors"></div>
         </div>
         <div class="galbar">
           <div class="galroom"><b id="gal-room">—</b><span id="gal-period"></span></div>
           <div class="galtools">
-            <button id="gal-arrange" class="ghost" type="button">Rehang</button>
-            <label class="galjump">
-              <span class="sr-only">Jump to room</span>
-              <select id="gal-jump" aria-label="Jump to room"></select>
-            </label>
+            <span class="galhint">Drag to look around · scroll any direction</span>
           </div>
         </div>
         <div class="galmap" id="gal-map" role="navigation" aria-label="Museum rooms"></div>
@@ -197,7 +194,7 @@
     <div id="i-opts" class="options"></div>
     <button id="i-skip" class="action" type="button">
       <span class="bt">Withhold judgement</span>
-      <span class="bd">No Understanding either way. The record notes that you declined.</span>
+      <span class="bd">Small Understanding from cataloguing only. A correct reading pays more.</span>
     </button>
   </div>
 </div>

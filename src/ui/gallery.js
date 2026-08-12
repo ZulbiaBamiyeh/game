@@ -15,29 +15,34 @@
   const V = S7.visitors;
 
   const SCALE = 2;                 /* world pixels -> canvas pixels */
-  const CW = 800, CH = 340;        /* canvas, in canvas pixels */
-  const VIEW = CW / SCALE;         /* logical width of the visible strip */
+  const CW = 800, CH = 420;        /* canvas — taller for multi-storey */
+  const VIEW_W = CW / SCALE;       /* logical width of the viewport */
+  const VIEW_H = CH / SCALE;       /* logical height of the viewport */
+  const VIEW = VIEW_W;             /* legacy alias */
 
   const WALL_TOP = 14;
   const PLAQUE_Y = 26;
   const RAIL_Y = 38;               /* picture rail */
   const FLOOR_Y = V.FLOOR_Y;       /* 112 */
+  const FLOOR_PITCH = V.FLOOR_PITCH || 178;
   const PERSON = 3;                /* people are drawn at 3:1 — 33 logical tall */
 
   let canvas, ctx;
-  let cam = 0, camTarget = 0;
-  let dragging = false, dragMoved = 0, dragX = 0, dragCam = 0;
+  let camX = 0, camY = 0, camTX = 0, camTY = 0;
+  let dragging = false, dragMoved = 0, dragPX = 0, dragPY = 0, dragCamX = 0, dragCamY = 0;
   let layoutCache = null;
   let onOpen = null, onSelect = null;
   let hover = null, selected = null;   /* exhibit, or { board:true, room } */
   let arrange = false;
-  let dragEx = null;                /* an exhibit being carried to a new spot */
+  let dragEx = null;
   let pointer = { x: 0, y: 0 };
+  let activeFloor = 0;             /* storey while painting a room */
   /* Museum facility levels, snapshotted at the start of each frame so every
      draw helper can see what the player has bought without threading S through
      twenty function signatures. */
   let fac = null;
   let guideSprites = [];
+  let staffSprites = [];
 
   /* ---------- palette ------------------------------------------------------- */
 
@@ -69,19 +74,18 @@
       lighting: u.lighting || 0,
       cases: u.cases || 0,
       labels: u.labels || 0,
-      tickets: u.tickets || 0,
-      leaflet: u.leaflet || 0,
-      plinths: u.plinths || 0,
       shop: u.shop || 0,
-      guides: u.guides || 0,
+      staff: u.staff || u.guides || 0,
+      guides: u.staff || u.guides || 0,
       cafe: u.cafe || 0,
       climate: u.climate || 0,
-      wing: u.wing || 0,
-      press: u.press || 0,
-      touring: u.touring || 0,
+      upper: u.upper || (u.wing ? 1 : 0),
+      wing: u.upper || u.wing || 0,
       research: u.research || 0,
       deepgal: u.deepgal || 0,
       climateOn: !!(S.flags && S.flags.climate),
+      /* retired upgrades — keep zero so old draw branches stay quiet */
+      tickets: 0, leaflet: 0, plinths: 0, press: 0, touring: 0,
     };
   }
 
@@ -104,52 +108,32 @@
     canvas.addEventListener("pointerdown", (e) => {
       const p = local(e);
       pointer = p;
-      const hit = pick(p.x, p.y);
-      if (arrange && hit && hit.a) {
-        dragEx = { e: hit, from: hit.room };
-        dragMoved = 0;
-        canvas.setPointerCapture(e.pointerId);
-        return;
-      }
       dragging = true; dragMoved = 0;
-      dragX = p.x; dragCam = cam;
+      dragPX = p.x; dragPY = p.y;
+      dragCamX = camX; dragCamY = camY;
       canvas.setPointerCapture(e.pointerId);
     });
 
     canvas.addEventListener("pointermove", (e) => {
       const p = local(e);
       pointer = p;
-      if (dragEx) {
-        dragMoved += 1;
-        /* Carrying something past the edge pans the building along with it. */
-        if (p.x < 60) camTarget = cam = clampCam(cam - 3);
-        else if (p.x > CW - 60) camTarget = cam = clampCam(cam + 3);
-        return;
-      }
       if (dragging) {
-        const dx = (p.x - dragX) / SCALE;
-        dragMoved = Math.max(dragMoved, Math.abs(dx));
-        cam = camTarget = clampCam(dragCam - dx);
+        const dx = (p.x - dragPX) / SCALE;
+        const dy = (p.y - dragPY) / SCALE;
+        dragMoved = Math.max(dragMoved, Math.abs(dx) + Math.abs(dy));
+        camX = camTX = clampCamX(dragCamX - dx);
+        camY = camTY = clampCamY(dragCamY - dy);
         return;
       }
       if (layoutCache) {
         hover = pick(p.x, p.y);
-        const over = !!hover;
-        canvas.style.cursor = over ? (arrange && hover.a ? "grab" : "pointer")
-                                   : (arrange ? "default" : "grab");
+        canvas.style.cursor = hover ? "pointer" : "grab";
       }
     });
 
     const release = (e) => {
       const p = local(e);
       try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* gone */ }
-
-      if (dragEx) {
-        const drop = dropTarget(p.x);
-        if (drop && handlers.onMove) handlers.onMove(dragEx.e.a, drop.roomId, drop.index);
-        dragEx = null;
-        return;
-      }
       if (!dragging) return;
       dragging = false;
       if (dragMoved < 4) {
@@ -163,7 +147,7 @@
       }
     };
     canvas.addEventListener("pointerup", release);
-    canvas.addEventListener("pointercancel", () => { dragging = false; dragEx = null; });
+    canvas.addEventListener("pointercancel", () => { dragging = false; });
     canvas.addEventListener("dblclick", (e) => {
       const p = local(e);
       const hit = pick(p.x, p.y);
@@ -171,56 +155,43 @@
     });
     canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
-      camTarget = clampCam(camTarget + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.6);
+      camTX = clampCamX(camTX + e.deltaX * 0.55);
+      camTY = clampCamY(camTY + e.deltaY * 0.55);
     }, { passive: false });
     canvas.style.cursor = "grab";
   }
 
-  /* Where a carried exhibit would land: which room, and how many of its
-     exhibits sit to the left of the pointer. */
-  function dropTarget(px) {
-    if (!layoutCache) return null;
-    const wx = px / SCALE + cam;
-    const room = V.roomAt(layoutCache, wx);
-    /* Foyer, café and wing rooms are not hang space — dropping there would
-       park the piece in a room id the layout never reads exhibits from. */
-    if (!room || !room.era || room.foyer || room.amenity) return null;
-    let index = 0;
-    for (const e of room.exhibits) if (e !== dragEx.e && e.x < wx) index++;
-    return { roomId: room.era.id, index };
-  }
-
-  const setArrange = (on) => {
-    arrange = !!on;
-    if (!arrange) dragEx = null;
-    canvas.style.cursor = arrange ? "default" : "grab";
-  };
-  const isArranging = () => arrange;
-  const isDragging = () => !!dragEx;
-  /* Test hook: what the hit-test sees at a canvas-space point. */
+  const setArrange = () => { /* rehang removed */ };
+  const isArranging = () => false;
+  const isDragging = () => false;
   const probe = (px, py) => {
     const e = pick(px, py);
     return {
-      cam, arrange,
+      cam: camX, arrange: false,
       hit: e && e.a ? e.a.no : null,
       board: !!(e && e.board),
     };
   };
   const clearSelection = () => { selected = null; };
 
-  const clampCam = (x) =>
-    Math.max(0, Math.min(Math.max(0, (layoutCache ? layoutCache.total : VIEW) - VIEW), x));
+  const clampCamX = (x) => {
+    const total = layoutCache ? layoutCache.total : VIEW_W;
+    return Math.max(0, Math.min(Math.max(0, total - VIEW_W), x));
+  };
+  const clampCamY = (y) => {
+    const totalH = layoutCache ? (layoutCache.totalH || H) : VIEW_H;
+    return Math.max(0, Math.min(Math.max(0, totalH - VIEW_H + 20), y));
+  };
 
-  /* World-space box of the room intro board, just inside the left wall. */
+  /* Floor-local box of the room intro board (world y = floorBase + y). */
   function boardBox(r) {
-    return { x: r.x + 11, y: 40, w: 32, h: 42 };
+    return { x: r.x + 10, y: 38, w: 38, h: 48, floor: r.floor || 0 };
   }
 
-  /* Exhibit first, then room boards — so a piece hanging near the plaque still
-     wins the click. Boards return { board:true, room }. */
+  /* Exhibit first, then room boards. */
   function pick(px, py) {
     if (!layoutCache) return null;
-    const wx = px / SCALE + cam, wy = py / SCALE;
+    const wx = px / SCALE + camX, wy = py / SCALE + camY;
     for (const e of layoutCache.exhibits) {
       const b = exhibitBox(e);
       if (wx >= b.x - 4 && wx <= b.x + b.w + 4 && wy >= b.y - 4 && wy <= b.y + b.h + 8) return e;
@@ -228,7 +199,9 @@
     for (const r of layoutCache.rooms) {
       if (!roomHasBoard(r)) continue;
       const b = boardBox(r);
-      if (wx >= b.x - 2 && wx <= b.x + b.w + 2 && wy >= b.y - 2 && wy <= b.y + b.h + 2)
+      const base = V.floorBase(r.floor || 0);
+      if (wx >= b.x - 2 && wx <= b.x + b.w + 2 &&
+          wy >= base + b.y - 2 && wy <= base + b.y + b.h + 2)
         return { board: true, room: r };
     }
     return null;
@@ -254,29 +227,35 @@
      colossal head runs from the floor almost to the ceiling. */
   function exhibitBox(e) {
     const h = e.h, w = Math.round(h * 0.95);
+    const base = V.floorBase(e.floor !== undefined ? e.floor : ((e.room && e.room.floor) || 0));
     if (e.mount === "wall") {
-      /* Ordinary panels hang above head height; monumental ones come down
-         nearly to the floor, because that is the only way to fit them. */
       const bottom = h <= 50 ? 96 : FLOOR_Y - 4;
       const top = Math.max(18, bottom - h);
-      return { x: e.x - w / 2, y: top, w, h: bottom - top };
+      return { x: e.x - w / 2, y: base + top, w, h: bottom - top, base };
     }
     if (e.mount === "plinth") {
       const plinthTop = Math.max(FLOOR_Y - 48, Math.min(FLOOR_Y - 4, Math.round(74 + h / 2)));
-      return { x: e.x - w / 2, y: plinthTop - h, w, h, plinthTop };
+      return { x: e.x - w / 2, y: base + plinthTop - h, w, h, plinthTop: base + plinthTop, base };
     }
     const bottom = 92;                       /* case */
-    return { x: e.x - w / 2, y: bottom - h, w, h, caseBottom: bottom };
+    return { x: e.x - w / 2, y: base + bottom - h, w, h, caseBottom: base + bottom, base };
   }
 
   /* ---------- world drawing --------------------------------------------------- */
 
-  const sx = (wx) => Math.round((wx - cam) * SCALE);
-  const sy = (wy) => Math.round(wy * SCALE);
-  const rect = (wx, wy, w, h, col) => {
+  const sx = (wx) => Math.round((wx - camX) * SCALE);
+  /* World y (includes floor pitch for multi-storey). */
+  const sy = (wy) => Math.round((wy - camY) * SCALE);
+  const ly = (localY) => activeFloor * FLOOR_PITCH + localY;
+  const syl = (localY) => sy(ly(localY));
+  /* While painting a room, rect() treats y as floor-local. */
+  let roomLocal = false;
+  function rect(wx, wy, w, h, col) {
+    const yy = roomLocal ? ly(wy) : wy;
     ctx.fillStyle = col;
-    ctx.fillRect(sx(wx), sy(wy), Math.round(w * SCALE), Math.round(h * SCALE));
-  };
+    ctx.fillRect(sx(wx), sy(yy), Math.round(w * SCALE), Math.round(h * SCALE));
+  }
+  const syR = (y) => (roomLocal ? syl(y) : sy(y));
 
   /* ---------- the room ------------------------------------------------------
      Three surfaces and a light source. Everything else is furniture. */
@@ -311,11 +290,11 @@
     }
     ctx.globalAlpha = 1;
     /* a soft sheen down the middle of the floor, as if from the lights */
-    const g = ctx.createLinearGradient(0, sy(FLOOR_Y), 0, sy(V.H));
+    const g = ctx.createLinearGradient(0, syR(FLOOR_Y), 0, syR(V.H));
     g.addColorStop(0, "rgba(255,226,166,0.07)");
     g.addColorStop(1, "rgba(255,226,166,0)");
     ctx.fillStyle = g;
-    ctx.fillRect(sx(x0), sy(FLOOR_Y), Math.round(w * SCALE), Math.round((V.H - FLOOR_Y) * SCALE));
+    ctx.fillRect(sx(x0), syR(FLOOR_Y), Math.round(w * SCALE), Math.round((V.H - FLOOR_Y) * SCALE));
   }
 
   /* Wall: a vertical wash, panel joins, and the picture rail. */
@@ -354,11 +333,11 @@
     for (let lx = Math.ceil(x0 / pitch) * pitch; lx < x0 + w; lx += pitch) {
       rect(lx - 3, WALL_TOP - 4, 7, 3, "#3a332a");
       rect(lx - 2, WALL_TOP - 2, 5, 1, bulb);
-      const g = ctx.createRadialGradient(sx(lx), sy(WALL_TOP - 2), 1, sx(lx), sy(WALL_TOP - 2), 30 + light);
+      const g = ctx.createRadialGradient(sx(lx), syR(WALL_TOP - 2), 1, sx(lx), syR(WALL_TOP - 2), 30 + light);
       g.addColorStop(0, "rgba(255,226,166," + glow.toFixed(3) + ")");
       g.addColorStop(1, "rgba(255,226,166,0)");
       ctx.fillStyle = g;
-      ctx.fillRect(sx(lx) - 32, sy(0), 64, sy(WALL_TOP + 10));
+      ctx.fillRect(sx(lx) - 32, syR(0), 64, Math.round((WALL_TOP + 10) * SCALE));
     }
   }
 
@@ -374,31 +353,48 @@
       ctx.strokeStyle = i % 2 ? "#3d6b45" : "#4f7f52";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(sx(px), sy(117));
-      ctx.quadraticCurveTo(sx(px + Math.cos(a) * len * 0.5), sy(112 + Math.sin(a) * len * 0.4), sx(ex), sy(ey));
+      ctx.moveTo(sx(px), syR(117));
+      ctx.quadraticCurveTo(sx(px + Math.cos(a) * len * 0.5), syR(112 + Math.sin(a) * len * 0.4), sx(ex), syR(ey));
       ctx.stroke();
     }
   }
 
+  function drawStaffAt(wx, localY, kind) {
+    if (!staffSprites.length) {
+      for (let i = 0; i < 4; i++) staffSprites.push(S7.people.makePerson(7000 + i * 19, "staff"));
+    }
+    const s = staffSprites[Math.abs(Math.floor(wx / 30)) % staffSprites.length];
+    const py = syR(localY || FLOOR_Y + 18) - s.h * PERSON;
+    ctx.drawImage(s.stand, sx(wx) - Math.round(s.w * PERSON / 2), py, s.w * PERSON, s.h * PERSON);
+    /* apron / badge */
+    rect(wx - 2, (localY || FLOOR_Y + 18) - 14, 4, 5, kind === "cafe" ? "#e8e1d1" : "#c79a42");
+  }
+
   function drawRoom(r) {
     const x0 = r.x, x1 = r.x + r.width;
-    if (x1 < cam - 40 || x0 > cam + VIEW + 40) return;
+    activeFloor = r.floor || 0;
+    const base = activeFloor * FLOOR_PITCH;
+    /* Cull rooms outside the 2D viewport. */
+    if (x1 < camX - 40 || x0 > camX + VIEW_W + 40) return;
+    if (base + V.H < camY - 20 || base > camY + VIEW_H + 20) return;
 
+    roomLocal = true;
     const dim = !!r.deepgal;
     drawWall(x0, r.width, themeWall(r));
     drawFloor(x0, r.width);
     drawCeiling(x0, r.width, dim);
 
-    if (r.foyer) { drawFoyer(r); return; }
-    if (r.cafe) { drawCafe(r); return; }
-    if (r.deepgal) { drawDeepGallery(r); return; }
-    if (r.wing) { drawWingRoom(r); return; }
+    if (r.foyer) { drawFoyer(r); roomLocal = false; return; }
+    if (r.stairs) { drawStairs(r); roomLocal = false; return; }
+    if (r.shop) { drawGiftShop(r); roomLocal = false; return; }
+    if (r.cafe) { drawCafe(r); roomLocal = false; return; }
+    if (r.researchRoom) { drawResearchRoom(r); roomLocal = false; return; }
+    if (r.deepgal) { drawDeepGallery(r); roomLocal = false; return; }
+    if (r.wing) { drawWingRoom(r); roomLocal = false; return; }
 
     if (roomHasBoard(r)) drawInfoBoard(r);
     if (r.width > 260) drawPlant(x1 - 22);
 
-    /* Climate control: a wall unit and the soft blue of a cooled room.
-       Kept clear of the intro board on the left. */
     if (fac && (fac.climate > 0 || fac.climateOn)) {
       drawClimateUnit(x0 + 52);
       if (fac.climate >= 3 || fac.climateOn) {
@@ -408,68 +404,63 @@
       }
     }
 
-    /* Volunteer guides stand by the best wall in each room once trained. */
-    if (fac && fac.guides > 0 && r.exhibits.length) drawGuide(r);
+    if (fac && fac.staff > 0 && r.exhibits.length) drawGuide(r);
+    roomLocal = false;
+  }
 
-    /* Press: a framed cutting by the door. */
-    if (fac && fac.press > 0) {
-      const nx = x1 - 28;
-      rect(nx, 48, 18, 22, "#2a2418");
-      rect(nx, 48, 18, 1, "#8a6a2c");
-      for (let i = 0; i < 5; i++) rect(nx + 2, 52 + i * 3, 14, 1, i === 0 ? "#c79a42" : "#5d5138");
+  function drawStairs(r) {
+    const x0 = r.x, w = r.width;
+    /* Stone stair hall */
+    ctx.globalAlpha = 0.12;
+    rect(x0, WALL_TOP, w, FLOOR_Y - WALL_TOP, "#4a5a6a");
+    ctx.globalAlpha = 1;
+    /* Steps rising */
+    const goingUp = (r.stairsTo || 0) > (r.floor || 0);
+    for (let i = 0; i < 8; i++) {
+      const t = i / 8;
+      const y = FLOOR_Y - 8 - i * 8;
+      const inset = goingUp ? i * 4 : (7 - i) * 4;
+      rect(x0 + 18 + inset, y, w - 36 - inset * 1.2, 7, i % 2 ? "#5a5040" : "#4a4030");
+      rect(x0 + 18 + inset, y, w - 36 - inset * 1.2, 1, "#7a6a50");
     }
-
-    /* Touring show: a travel crate parked against the skirting. */
-    if (fac && fac.touring > 0 && r.exhibits.length) {
-      const cx = x0 + 40;
-      rect(cx, FLOOR_Y - 18, 28, 18, "#6b5a3a");
-      rect(cx, FLOOR_Y - 18, 28, 2, "#87724a");
-      rect(cx + 2, FLOOR_Y - 14, 24, 2, "#4a3f28");
-      rect(cx + 10, FLOOR_Y - 10, 8, 6, "#3a3322");
-    }
-
-    /* Endowed research post: a reading table at the far end of busy rooms. */
-    if (fac && fac.research > 0 && r.exhibits.length && r.width > 240) {
-      const rx = x1 - 48;
-      rect(rx - 16, 120, 32, 4, "#5a4a30");
-      rect(rx - 14, 124, 3, 12, "#4a3f28");
-      rect(rx + 11, 124, 3, 12, "#4a3f28");
-      rect(rx - 6, 114, 10, 6, "#e8e1d1");
-      rect(rx - 5, 115, 8, 1, "#2a2418");
-      rect(rx + 6, 116, 4, 5, "#3a4a5a");
-    }
+    /* Banisters */
+    rect(x0 + 14, 40, 3, FLOOR_Y - 40, "#3a3426");
+    rect(x0 + w - 17, 40, 3, FLOOR_Y - 40, "#3a3426");
+    rect(x0 + 12, 38, w - 24, 3, "#c79a42");
+    /* Sign */
+    rect(x0 + w / 2 - 22, 42, 44, 12, "#1a160d");
+    rect(x0 + w / 2 - 22, 42, 44, 1, "#c79a42");
+    drawPlant(x0 + w - 20);
   }
 
   /* Intro board beside the door of each gallery: a small wall plaque you can
-     click for the era and where the finds on these walls actually come from. */
+     click for the era and where the finds on these walls actually come from.
+     Body text is drawn crisp in the overlay (drawBoardLabel) — keep the plate
+     clear so the words are not fighting fake "line" texture. */
   function drawInfoBoard(r) {
     const b = boardBox(r);
     const lit = (selected && selected.board && selected.room === r) ||
                 (hover && hover.board && hover.room === r);
 
-    /* Mount plate and frame */
-    rect(b.x - 1, b.y - 1, b.w + 2, b.h + 2, lit ? "#8a6a2c" : "#2a2418");
-    rect(b.x, b.y, b.w, b.h, "#1a160d");
+    /* Outer mount + frame */
+    rect(b.x - 2, b.y - 2, b.w + 4, b.h + 4, lit ? "#6a5428" : "#1a160d");
+    rect(b.x - 1, b.y - 1, b.w + 2, b.h + 2, lit ? "#c79a42" : "#5a4e35");
+    rect(b.x, b.y, b.w, b.h, "#141008");
+    /* Gold header strip */
     rect(b.x, b.y, b.w, 1, lit ? "#e8c66a" : "#c79a42");
-    rect(b.x, b.y + 1, b.w, 1, "#4a3f28");
-    /* Header bar */
-    rect(b.x + 2, b.y + 4, b.w - 4, 6, "#2f2818");
-    rect(b.x + 3, b.y + 5, b.w - 6, 2, lit ? "#e8c66a" : "#8a6a2c");
-    /* Body lines — texture for the wall, real words drawn in the overlay */
-    for (let i = 0; i < 5; i++) {
-      const w = 10 + (i % 3) * 5;
-      rect(b.x + 4, b.y + 14 + i * 4, w, 1, i === 0 ? "#6b5a3a" : "#3d3423");
-    }
-    /* Small corner dots like screw heads */
-    rect(b.x + 2, b.y + 2, 1, 1, "#5a4e35");
-    rect(b.x + b.w - 3, b.y + 2, 1, 1, "#5a4e35");
-    rect(b.x + 2, b.y + b.h - 3, 1, 1, "#5a4e35");
-    rect(b.x + b.w - 3, b.y + b.h - 3, 1, 1, "#5a4e35");
+    rect(b.x + 2, b.y + 3, b.w - 4, 1, lit ? "#e8c66a" : "#8a6a2c");
+    /* Soft inner field for text */
+    rect(b.x + 2, b.y + 8, b.w - 4, b.h - 12, "#1c160c");
+    /* Screw heads */
+    rect(b.x + 2, b.y + 2, 1, 1, "#8a6a2c");
+    rect(b.x + b.w - 3, b.y + 2, 1, 1, "#8a6a2c");
+    rect(b.x + 2, b.y + b.h - 3, 1, 1, "#8a6a2c");
+    rect(b.x + b.w - 3, b.y + b.h - 3, 1, 1, "#8a6a2c");
 
     if (lit) {
       ctx.strokeStyle = "#e8c66a";
       ctx.lineWidth = 2;
-      ctx.strokeRect(sx(b.x) - 2, sy(b.y) - 2, Math.round(b.w * SCALE) + 4, Math.round(b.h * SCALE) + 4);
+      ctx.strokeRect(sx(b.x) - 3, sy(b.y) - 3, Math.round(b.w * SCALE) + 6, Math.round(b.h * SCALE) + 6);
     }
   }
 
@@ -487,17 +478,75 @@
     }
     const s = guideSprites[Math.abs(Math.floor(r.x / 40)) % guideSprites.length];
     const gx = r.x + 58;   /* clear of the intro board */
-    if (gx < cam - 30 || gx > cam + VIEW + 30) return;
-    const py = sy(FLOOR_Y + 18) - s.h * PERSON;
+    if (gx < camX - 30 || gx > camX + VIEW_W + 30) return;
+    const py = syR(FLOOR_Y + 18) - s.h * PERSON;
     ctx.drawImage(s.stand, sx(gx) - Math.round(s.w * PERSON / 2), py, s.w * PERSON, s.h * PERSON);
     /* lanyard badge */
     rect(gx - 1, FLOOR_Y - 4, 3, 4, "#c79a42");
   }
 
+  /* Full gift shop room: shelves, postcard rack, till. Visitors come here to spend. */
+  function drawGiftShop(r) {
+    const x0 = r.x, x1 = r.x + r.width;
+    const lvl = r.shop || 1;
+    /* Warm retail paint — a little different from gallery walls */
+    ctx.globalAlpha = 0.12;
+    rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#6a4a28");
+    ctx.globalAlpha = 1;
+    /* Sign */
+    rect(x0 + r.width / 2 - 40, 40, 80, 16, "#2a2418");
+    rect(x0 + r.width / 2 - 40, 40, 80, 1, "#c79a42");
+    rect(x0 + r.width / 2 - 32, 46, 48, 2, "#e8c66a");
+    rect(x0 + r.width / 2 - 28, 50, 36, 2, "#8a6a2c");
+    /* Wall shelves of stock — denser at higher shop level */
+    for (let row = 0; row < 3; row++) {
+      const y = 62 + row * 14;
+      rect(x0 + 14, y, r.width - 50, 2, "#4a3f28");
+      const n = 6 + Math.min(6, lvl);
+      for (let i = 0; i < n; i++) {
+        const px = x0 + 18 + i * 14;
+        if (px > x1 - 40) break;
+        rect(px, y - 10, 6, 10, i % 3 === 0 ? "#b5904a" : i % 3 === 1 ? "#6b5a8a" : "#4a6b45");
+        rect(px + 1, y - 9, 2, 3, "#e8e1d1");
+        if (lvl >= 3 && i % 2 === 0) rect(px + 3, y - 8, 2, 2, "#c79a42");
+      }
+    }
+    /* Postcard spinner */
+    rect(x0 + 22, 110, 16, 22, "#3a3426");
+    for (let i = 0; i < 4; i++) rect(x0 + 24, 112 + i * 4, 12, 3, i % 2 ? "#c79a42" : "#8f8a7a");
+    /* Soft-toy bin / kids corner once the shop is stocked */
+    if (lvl >= 2) {
+      rect(x0 + 44, 120, 18, 16, "#4a3f28");
+      rect(x0 + 46, 122, 6, 6, "#c79a42");
+      rect(x0 + 54, 124, 5, 5, "#6b5a8a");
+    }
+    /* Counter + till */
+    const kx = r.serviceX || (x0 + r.width * 0.55);
+    rect(kx - 28, 100, 56, 5, "#6d5b3c");
+    rect(kx - 28, 100, 56, 2, "#87724a");
+    rect(kx - 26, 105, 52, 22, "#4f4229");
+    rect(kx + 8, 92, 12, 8, "#2a2a33");
+    rect(kx + 10, 94, 8, 3, "#4e9d4e");
+    rect(kx - 18, 94, 10, 6, "#3a3426");
+    for (let i = 0; i < 3; i++) rect(kx - 16 + i * 3, 95, 2, 4, "#e8e1d1");
+    /* Paper bags stacked by the till */
+    rect(kx - 24, 118, 8, 10, "#c4a86a");
+    rect(kx - 22, 120, 4, 6, "#a8884a");
+    /* Cashier behind the till */
+    if (fac && (fac.staff > 0 || true)) drawStaffAt(kx + 4, FLOOR_Y + 16, "shop");
+    drawPlant(x1 - 22);
+    if (fac && fac.climate > 0) drawClimateUnit(x0 + 16);
+  }
+
   function drawCafe(r) {
     const x0 = r.x, x1 = r.x + r.width;
+    const lvl = r.cafe || 1;
+    /* Soft café wash */
+    ctx.globalAlpha = 0.10;
+    rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#4a6b45");
+    ctx.globalAlpha = 1;
     /* counter */
-    const kx = x0 + 48;
+    const kx = r.serviceX || (x0 + 48);
     rect(kx - 30, 96, 60, 6, "#6d5b3c");
     rect(kx - 30, 96, 60, 2, "#87724a");
     rect(kx - 28, 102, 56, 26, "#4f4229");
@@ -505,22 +554,83 @@
     rect(kx - 18, 86, 12, 10, "#2a2a33");
     rect(kx - 16, 88, 8, 4, "#4e9d4e");
     for (let i = 0; i < 3; i++) rect(kx + 4 + i * 6, 90, 4, 5, i % 2 ? "#e8e1d1" : "#c79a42");
-    /* tables */
-    const nTables = 1 + Math.min(3, (fac ? fac.cafe : 1));
+    /* cake stand */
+    rect(kx - 8, 88, 10, 8, "#e8e1d1");
+    rect(kx - 6, 86, 6, 2, "#c79a42");
+    /* steam from the machine */
+    ctx.globalAlpha = 0.25;
+    rect(kx - 14, 80, 2, 4, "#e8e1d1");
+    rect(kx - 11, 78, 2, 5, "#e8e1d1");
+    ctx.globalAlpha = 1;
+    /* tables with place settings — match visitor seat layout */
+    const nTables = 1 + Math.min(4, lvl);
     for (let i = 0; i < nTables; i++) {
       const tx = x0 + 100 + i * 36;
       if (tx > x1 - 20) break;
-      rect(tx - 10, 128, 20, 3, "#6b5a3a");
-      rect(tx - 1, 131, 2, 12, "#4a3f28");
-      rect(tx - 8, 140, 3, 4, "#4a3f28");
-      rect(tx + 5, 140, 3, 4, "#4a3f28");
+      rect(tx - 12, 126, 24, 3, "#6b5a3a");
+      rect(tx - 12, 126, 24, 1, "#87724a");
+      rect(tx - 1, 129, 2, 14, "#4a3f28");
+      rect(tx - 10, 142, 3, 4, "#4a3f28");
+      rect(tx + 7, 142, 3, 4, "#4a3f28");
+      rect(tx - 4, 124, 3, 2, "#e8e1d1");
+      rect(tx + 2, 124, 3, 2, "#c79a42");
+      /* chair backs */
+      rect(tx - 14, 132, 3, 10, "#4a3f28");
+      rect(tx + 11, 132, 3, 10, "#4a3f28");
     }
     /* chalkboard menu */
-    rect(x0 + 12, 44, 28, 36, "#1a2218");
-    rect(x0 + 12, 44, 28, 1, "#4a6b45");
-    for (let i = 0; i < 6; i++) rect(x0 + 15, 50 + i * 4, 18 + (i % 2) * 4, 1, "#6a8b65");
+    rect(x0 + 12, 44, 32, 40, "#1a2218");
+    rect(x0 + 12, 44, 32, 1, "#4a6b45");
+    for (let i = 0; i < 7; i++) rect(x0 + 15, 50 + i * 4, 16 + (i % 3) * 4, 1, "#6a8b65");
+    /* "OPEN" lamp over the counter once the café is established */
+    if (lvl >= 2) {
+      rect(kx - 6, 42, 12, 4, "#2a2418");
+      rect(kx - 4, 44, 8, 2, "#4e9d4e");
+    }
+    /* Barista */
+    drawStaffAt(kx, FLOOR_Y + 16, "cafe");
     drawPlant(x1 - 22);
     if (fac && fac.climate > 0) drawClimateUnit(x0 + 48);
+  }
+
+  function drawResearchRoom(r) {
+    const x0 = r.x, x1 = r.x + r.width;
+    /* Cool study light */
+    ctx.globalAlpha = 0.14;
+    rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#2a3a4a");
+    ctx.globalAlpha = 1;
+    /* Long reading table */
+    rect(x0 + 30, 118, r.width - 60, 5, "#5a4a30");
+    rect(x0 + 30, 118, r.width - 60, 1, "#87724a");
+    rect(x0 + 34, 123, 4, 14, "#4a3f28");
+    rect(x1 - 50, 123, 4, 14, "#4a3f28");
+    /* Books and lamp */
+    for (let i = 0; i < 5; i++)
+      rect(x0 + 50 + i * 12, 110, 8, 8, i % 2 ? "#6b5a8a" : "#8a6a2c");
+    rect(x0 + r.width / 2 - 4, 100, 8, 18, "#3a3a44");
+    rect(x0 + r.width / 2 - 6, 98, 12, 3, "#ffe6ad");
+    /* Lamp glow */
+    const g = ctx.createRadialGradient(
+      sx(x0 + r.width / 2), syR(98), 2,
+      sx(x0 + r.width / 2), syR(98), 28);
+    g.addColorStop(0, "rgba(255,230,173,0.18)");
+    g.addColorStop(1, "rgba(255,230,173,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx(x0 + r.width / 2 - 30), sy(70), 60, 50);
+    /* Shelf of reference volumes */
+    rect(x0 + 14, 48, 40, 3, "#4a3f28");
+    for (let i = 0; i < 6; i++) rect(x0 + 16 + i * 6, 40, 5, 8, i % 3 === 0 ? "#4a6b45" : "#6b5a3a");
+    /* Map pinned to the wall */
+    rect(x1 - 48, 48, 28, 22, "#c4b896");
+    rect(x1 - 46, 50, 24, 18, "#8a9a6a");
+    rect(x1 - 42, 54, 8, 6, "#6a7a4a");
+    /* Card catalogue drawers */
+    rect(x0 + 18, 100, 22, 16, "#5a4a30");
+    for (let i = 0; i < 3; i++) {
+      rect(x0 + 20, 102 + i * 4, 18, 3, "#4a3f28");
+      rect(x0 + 27, 103 + i * 4, 2, 1, "#c79a42");
+    }
+    drawPlant(x1 - 22);
   }
 
   function drawDeepGallery(r) {
@@ -556,15 +666,11 @@
   }
 
   /* ---------- the entrance hall ---------------------------------------------
-     Street doors, daylight on the floor, and the desk where the money is
-     actually taken. Tickets, leaflets and the gift shop all land here so a
-     player who has just spent money can see the difference without leaving
-     the room. */
+     Street doors, daylight, admissions desk. The gift shop is its own room. */
   function drawFoyer(r) {
     const dx = r.doorX;
     const tickets = fac ? fac.tickets : 0;
     const leaflets = fac ? fac.leaflet : 0;
-    const shopLvl = fac ? fac.shop : 0;
 
     /* the doors: glass, with the street outside */
     rect(dx - 17, 34, 34, FLOOR_Y - 34, "#8fa9b5");
@@ -626,22 +732,6 @@
     rect(kx - 25, 49, 34, 2, "#c79a42");
     rect(kx - 25, 53, 24, 2, "#7d7461");
 
-    /* gift shop bay at the far end of a lengthened foyer */
-    if (shopLvl > 0) {
-      const sx0 = r.width - 64;
-      rect(sx0, 44, 50, 14, "#2a2418");
-      rect(sx0, 44, 50, 1, "#c79a42");
-      rect(sx0 + 6, 49, 30, 2, "#8a6a2c");
-      /* shelves of postcards and books */
-      for (let row = 0; row < 3; row++) {
-        rect(sx0 + 4, 70 + row * 12, 42, 2, "#4a3f28");
-        for (let i = 0; i < 5 + Math.min(3, shopLvl); i++)
-          rect(sx0 + 6 + i * 7, 62 + row * 12, 5, 8, i % 3 === 0 ? "#b5904a" : i % 3 === 1 ? "#6b5a8a" : "#4a6b45");
-      }
-      rect(sx0 + 8, 108, 34, 4, "#6d5b3c");
-      rect(sx0 + 8, 112, 34, 16, "#4f4229");
-    }
-
     /* a rope line and a bin, because foyers are full of both */
     rect(kx - 40, 132, 1, 8, C.rope);
     rect(kx + 40, 132, 1, 8, C.rope);
@@ -652,9 +742,10 @@
 
   function drawDoorway(x0) {
     /* a dark arch, with the next room implied beyond it */
-    rect(x0, WALL_TOP - 6, V.DOOR, 6, "#191409");
-    rect(x0, WALL_TOP, V.DOOR, FLOOR_Y - WALL_TOP, C.wallShade);
-    const dx = x0 + 10, dw = V.DOOR - 20;
+    const DW = V.DOOR || 58;
+    rect(x0, WALL_TOP - 6, DW, 6, "#191409");
+    rect(x0, WALL_TOP, DW, FLOOR_Y - WALL_TOP, C.wallShade);
+    const dx = x0 + 10, dw = DW - 20;
     rect(dx, 34, dw, FLOOR_Y - 34, C.door);
     /* the far wall and floor of whatever is through there, dimly */
     rect(dx + 2, 46, dw - 4, 44, "#1b1710");
@@ -666,7 +757,7 @@
     /* light spilling through onto the floor */
     for (let y = FLOOR_Y; y < V.H; y++) {
       const t = (y - FLOOR_Y) / (V.H - FLOOR_Y);
-      rect(x0, y, V.DOOR, 1, t < 0.35 ? "#221c12" : "#2e2617");
+      rect(x0, y, DW, 1, t < 0.35 ? "#221c12" : "#2e2617");
     }
     rect(dx, FLOOR_Y - 4, dw, 4, "#241e14");
   }
@@ -729,7 +820,7 @@
   function drawExhibit(e, S) {
     if (dragEx && dragEx.e === e) return;          /* it is in the curator's hands */
     const b = exhibitBox(e);
-    if (b.x + b.w < cam - 20 || b.x > cam + VIEW + 20) return;
+    if (b.x + b.w < camX - 20 || b.x > camX + VIEW_W + 20) return;
     const art = artAt(e, b);
     const aw = Math.round(b.w * SCALE), ah = Math.round(b.h * SCALE);
     const ring = (selected && !selected.board && selected === e) ? "#e8c66a"
@@ -825,7 +916,7 @@
 
   /* Somewhere to sit. Slatted, because a solid block reads as a plinth. */
   function drawBench(bn) {
-    if (bn.x < cam - 40 || bn.x > cam + VIEW + 40) return;
+    if (bn.x < camX - 40 || bn.x > camX + VIEW_W + 40) return;
     const w = 34;
     rect(bn.x - w / 2, 140, w, 3, "#6b5a3a");
     rect(bn.x - w / 2, 140, w, 1, "#87724a");
@@ -833,12 +924,12 @@
     rect(bn.x - w / 2 + 2, 146, 3, 6, "#4a3f28");
     rect(bn.x + w / 2 - 5, 146, 3, 6, "#4a3f28");
     ctx.fillStyle = C.shadow;
-    ctx.fillRect(sx(bn.x - w / 2), sy(152), Math.round(w * SCALE), 3);
+    ctx.fillRect(sx(bn.x - w / 2), syR(152), Math.round(w * SCALE), 3);
   }
 
   function drawAgent(a) {
     const y = V.feetY(a);
-    if (a.x < cam - 24 || a.x > cam + VIEW + 24) return;
+    if (a.x < camX - 24 || a.x > camX + VIEW_W + 24) return;
     const s = a.sprite;
     const px = sx(a.x) - Math.round(s.w * PERSON / 2);
     const py = sy(y) - s.h * PERSON;
@@ -891,7 +982,7 @@
   function drawDeskStaff(r) {
     if (!deskStaff) deskStaff = S7.people.makePerson(20240607, "staff");
     const x = r.deskX - 4;
-    if (x < cam - 30 || x > cam + VIEW + 30) return;
+    if (x < camX - 30 || x > camX + VIEW_W + 30) return;
     const s = deskStaff;
     /* stood behind the counter, so only the top half shows */
     ctx.save();
@@ -907,61 +998,121 @@
      Accession plates live with the exhibit in the depth sort, not in the final
      overlay — otherwise a visitor walking past a plinth gets the item number
      stamped across their chest. Speech bubbles and the selected wall card stay
-     in the overlay because those are UI, not furniture. */
+     in the overlay because those are UI, not furniture.
+
+     Type faces: a small UI stack for signs and cards (readable at 11–13px), mono
+     only for tiny accession numbers. Soft dark underlays keep ochre text
+     legible on the gallery wall. */
+
+  const FONT_UI = 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  const FONT_MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+
+  function fillTextShadow(text, x, y, fill, shadow) {
+    if (shadow) {
+      ctx.fillStyle = shadow;
+      ctx.fillText(text, x + 1, y + 1);
+    }
+    ctx.fillStyle = fill;
+    ctx.fillText(text, x, y);
+  }
 
   function drawLabel(e) {
     const b = exhibitBox(e);
     const x = sx(e.x);
     /* Wall plates hang just under the frame; floor pieces get a plate on the
        skirting in front of the mount — both still behind the walk band. */
-    const y = e.mount === "wall" ? sy(b.y + b.h) + 12 : sy(FLOOR_Y + 6);
+    const y = e.mount === "wall" ? sy(b.y + b.h) + 14 : sy((b.base || 0) + FLOOR_Y + 7);
     if (x < -80 || x > CW + 80) return;
     const labels = fac ? fac.labels : 0;
-    ctx.font = "9px ui-monospace, monospace";
     ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     if (labels <= 0) {
       /* Handwritten scrap until proper labels are written. */
-      ctx.fillStyle = "#00000055";
-      ctx.fillRect(x - 11, y - 7, 22, 9);
-      ctx.fillStyle = "#7d7461";
-      ctx.fillText(e.a.no, x, y);
+      const tw = 28;
+      ctx.fillStyle = "#0a0806cc";
+      ctx.fillRect(x - tw / 2, y - 7, tw, 14);
+      ctx.strokeStyle = "#3a3426";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x - tw / 2 + 0.5, y - 6.5, tw - 1, 13);
+      ctx.font = "10px " + FONT_MONO;
+      fillTextShadow(e.a.no, x, y + 1, "#a99f88", "#00000088");
     } else if (labels < 3) {
-      ctx.fillStyle = "#00000066";
-      ctx.fillRect(x - 13, y - 8, 26, 11);
-      ctx.fillStyle = "#a99f88";
-      ctx.fillText(e.a.no, x, y);
-    } else {
-      /* Proper printed label: accession plus a short title. */
-      const title = e.a.name.length > 18 ? e.a.name.slice(0, 16) + "…" : e.a.name;
-      ctx.font = "9px ui-monospace, monospace";
-      const tw = Math.max(ctx.measureText(title).width, ctx.measureText(e.a.no).width) + 10;
-      ctx.fillStyle = "#12100add";
-      ctx.fillRect(x - tw / 2, y - 8, tw, labels >= 6 ? 22 : 11);
+      const tw = 32;
+      ctx.fillStyle = "#12100aee";
+      ctx.fillRect(x - tw / 2, y - 8, tw, 16);
       ctx.fillStyle = "#8a6a2c";
       ctx.fillRect(x - tw / 2, y - 8, tw, 1);
-      ctx.fillStyle = labels >= 6 ? "#e8e1d1" : "#a99f88";
+      ctx.font = "10px " + FONT_MONO;
+      fillTextShadow(e.a.no, x, y + 1, "#d8cfb6", null);
+    } else {
+      /* Proper printed label: accession plus a short title. */
+      const title = e.a.name.length > 20 ? e.a.name.slice(0, 18) + "…" : e.a.name;
+      ctx.font = "600 11px " + FONT_UI;
+      const titleW = ctx.measureText(title).width;
+      ctx.font = "10px " + FONT_MONO;
+      const noW = ctx.measureText(e.a.no).width;
+      const tw = Math.ceil(Math.max(titleW, noW) + 14);
+      const th = labels >= 6 ? 28 : 16;
+      ctx.fillStyle = "#0f0d08f2";
+      ctx.fillRect(x - tw / 2, y - th / 2, tw, th);
+      ctx.fillStyle = "#c79a42";
+      ctx.fillRect(x - tw / 2, y - th / 2, tw, 2);
       if (labels >= 6) {
-        ctx.fillText(title, x, y);
-        ctx.fillStyle = "#a99f88";
-        ctx.fillText(e.a.no, x, y + 11);
+        ctx.font = "600 11px " + FONT_UI;
+        fillTextShadow(title, x, y - 4, "#f0e8d4", null);
+        ctx.font = "10px " + FONT_MONO;
+        fillTextShadow(e.a.no, x, y + 8, "#c4b896", null);
       } else {
-        ctx.fillText(e.a.no, x, y);
+        ctx.font = "10px " + FONT_MONO;
+        fillTextShadow(e.a.no, x, y + 1, "#e8e1d1", null);
       }
     }
     ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
   }
 
+  /* Room name over the doorway — a real wall plaque, not floating type. */
   function drawRoomPlaque(r) {
+    const name = (r.era && r.era.name) ? r.era.name : "";
+    const period = (r.era && r.era.period) ? r.era.period : "";
+    if (!name) return;
     const x = sx(r.x + r.width / 2);
-    if (x < -160 || x > CW + 160) return;
+    if (x < -200 || x > CW + 200) return;
+
     ctx.textAlign = "center";
-    ctx.font = "600 11px ui-monospace, monospace";
-    ctx.fillStyle = "#8a6a2c";
-    ctx.fillText(r.era.name.toUpperCase(), x, sy(PLAQUE_Y));
-    ctx.font = "9px ui-monospace, monospace";
-    ctx.fillStyle = "#6b6152";
-    ctx.fillText(r.era.period, x, sy(PLAQUE_Y) + 12);
+    ctx.textBaseline = "middle";
+    ctx.font = "600 12px " + FONT_UI;
+    const nameW = ctx.measureText(name.toUpperCase()).width;
+    ctx.font = "11px " + FONT_UI;
+    const perW = period ? ctx.measureText(period).width : 0;
+    const tw = Math.ceil(Math.max(nameW, perW) + 28);
+    const th = period ? 34 : 22;
+    const y = syR(PLAQUE_Y) + 2;
+    const px = Math.round(x - tw / 2);
+    const py = Math.round(y - th / 2);
+
+    /* Plaque body */
+    ctx.fillStyle = "#0c0a06f0";
+    ctx.fillRect(px - 1, py - 1, tw + 2, th + 2);
+    ctx.fillStyle = "#1a160d";
+    ctx.fillRect(px, py, tw, th);
+    ctx.fillStyle = "#c79a42";
+    ctx.fillRect(px, py, tw, 2);
+    ctx.fillStyle = "#3a3120";
+    ctx.fillRect(px, py + th - 1, tw, 1);
+    /* corner nicks */
+    ctx.fillStyle = "#5a4e35";
+    ctx.fillRect(px + 2, py + 4, 2, 2);
+    ctx.fillRect(px + tw - 4, py + 4, 2, 2);
+
+    ctx.font = "600 12px " + FONT_UI;
+    fillTextShadow(name.toUpperCase(), x, period ? y - 6 : y + 1, "#e8c66a", "#00000066");
+    if (period) {
+      ctx.font = "11px " + FONT_UI;
+      fillTextShadow(period, x, y + 9, "#c4b896", null);
+    }
     ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
   }
 
   /* Short label on the intro board itself, crisp over the pixel art. */
@@ -969,22 +1120,40 @@
     if (!roomHasBoard(r)) return;
     const b = boardBox(r);
     const cx = sx(b.x + b.w / 2);
+    const top = syR(b.y);
+    const bot = syR(b.y + b.h);
     if (cx < -40 || cx > CW + 40) return;
-    let name = (r.era.name || "").toUpperCase()
-      .replace(/ HORIZON$/, "")
-      .replace(/ FILL$/, "")
-      .replace(/ DEPOSIT$/, "")
-      .replace(/^THE /, "");
-    if (name.length > 11) name = name.slice(0, 10) + "…";
-    ctx.textAlign = "center";
-    ctx.font = "600 8px ui-monospace, monospace";
-    ctx.fillStyle = "#c79a42";
-    ctx.fillText(name, cx, sy(b.y + 14));
-    ctx.font = "7px ui-monospace, monospace";
-    ctx.fillStyle = "#7d7461";
+
+    let name = (r.era.name || "")
+      .replace(/ horizon$/i, "")
+      .replace(/ fill$/i, "")
+      .replace(/ deposit$/i, "")
+      .replace(/^the /i, "");
+    /* Prefer title case on the board — all-caps at this size turns to noise. */
+    if (name.length > 14) name = name.slice(0, 13) + "…";
+
     const n = r.exhibits.length;
-    ctx.fillText(n + (n === 1 ? " find" : " finds"), cx, sy(b.y + 22));
+    const sub = n + (n === 1 ? " find" : " finds");
+    const period = (r.era.period || "").replace(/\s*·.*$/, "");
+    const shortPer = period.length > 16 ? period.slice(0, 14) + "…" : period;
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    /* Title */
+    ctx.font = "600 11px " + FONT_UI;
+    fillTextShadow(name, cx, top + 22, "#e8c66a", "#000000aa");
+    /* Period line */
+    if (shortPer) {
+      ctx.font = "10px " + FONT_UI;
+      fillTextShadow(shortPer, cx, top + 38, "#c4b896", null);
+    }
+    /* Count */
+    ctx.font = "10px " + FONT_UI;
+    fillTextShadow(sub, cx, bot - 14, "#d8cfb6", null);
+
     ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
   }
 
   /* The card beside the piece — short, plain, the way a real gallery writes. */
@@ -995,33 +1164,43 @@
     const from = cu ? cu.name : "Unknown source";
     const period = cu && cu.period && cu.period !== "—" ? cu.period : "";
     const lines = [
-      a.name,
-      period ? from + " · " + period : from,
-      S7.artifacts.materialLabel(a.material) + " · " + a.condition.n,
-      "Item " + a.no + " · found at " + a.depth.toFixed(1) + " m",
+      { text: a.name, font: "600 13px " + FONT_UI, color: "#f2ebe0" },
+      { text: period ? from + " · " + period : from, font: "12px " + FONT_UI, color: "#e0b85a" },
+      { text: S7.artifacts.materialLabel(a.material) + " · " + a.condition.n,
+        font: "12px " + FONT_UI, color: "#cfc6b0" },
+      { text: "Item " + a.no + " · found at " + a.depth.toFixed(1) + " m",
+        font: "11px " + FONT_MONO, color: "#a99f88" },
     ];
-    ctx.font = "10px ui-monospace, monospace";
-    const w = Math.max(...lines.map((l, i) => ctx.measureText(l).width + (i === 0 ? 2 : 0))) + 16;
-    const h = lines.length * 12 + 12;
+    let maxW = 0;
+    for (const l of lines) {
+      ctx.font = l.font;
+      maxW = Math.max(maxW, ctx.measureText(l.text).width);
+    }
+    const padX = 12, padY = 10, lineH = 16;
+    const w = Math.ceil(maxW) + padX * 2;
+    const h = lines.length * lineH + padY * 2 - 2;
     /* to the right of the piece unless that runs off the canvas */
     let x = sx(b.x + b.w) + 12;
     if (x + w > CW - 6) x = sx(b.x) - w - 12;
     x = Math.max(6, Math.min(CW - w - 6, x));
     const y = Math.max(6, Math.min(CH - h - 6, sy(b.y) + 4));
 
-    ctx.fillStyle = "#12100aee";
-    ctx.strokeStyle = "#8a6a2c";
-    ctx.lineWidth = 1;
+    ctx.fillStyle = "#0c0a08f5";
+    ctx.strokeStyle = "#c79a42";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 2); else ctx.rect(x, y, w, h);
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 4); else ctx.rect(x, y, w, h);
     ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#8a6a2c";
-    ctx.fillRect(x, y, w, 2);
+    /* Gold top rule */
+    ctx.fillStyle = "#e8c66a";
+    ctx.fillRect(x + 1, y + 1, w - 2, 2);
 
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
     lines.forEach((l, i) => {
-      ctx.font = i === 0 ? "600 10px ui-monospace, monospace" : "10px ui-monospace, monospace";
-      ctx.fillStyle = i === 0 ? "#e8e1d1" : i === 1 ? "#c79a42" : "#a99f88";
-      ctx.fillText(l, x + 8, y + 17 + i * 12);
+      ctx.font = l.font;
+      ctx.fillStyle = l.color;
+      ctx.fillText(l.text, x + padX, y + padY + 12 + i * lineH);
     });
   }
 
@@ -1033,7 +1212,7 @@
     const x = sx(a.x), yTop = sy(V.feetY(a)) - a.sprite.h * PERSON - 6 - t * 26;
     if (x < -40 || x > CW + 40) return;
     ctx.globalAlpha = Math.max(0, Math.min(1, (1 - t) * 1.6));
-    ctx.font = "600 12px ui-monospace, monospace";
+    ctx.font = "600 13px " + FONT_UI;
     ctx.textAlign = "center";
     ctx.fillStyle = "#0f0d08";
     ctx.fillText("+" + S7.views.fmt(p.amount), x + 1, yTop + 1);
@@ -1069,47 +1248,48 @@
     const cy = sy(V.feetY(a)) - s.h * PERSON - 10;
     if (cx < -160 || cx > CW + 160) return;
 
-    ctx.font = "10px ui-monospace, monospace";
+    ctx.font = "12px " + FONT_UI;
     /* wrap to a sensible width */
     const words = b.text.split(" ");
     const lines = [];
     let line = "";
     for (const w of words) {
       const t = line ? line + " " + w : w;
-      if (ctx.measureText(t).width > 128 && line) { lines.push(line); line = w; }
+      if (ctx.measureText(t).width > 148 && line) { lines.push(line); line = w; }
       else line = t;
     }
     if (line) lines.push(line);
 
     const wide = Math.max(...lines.map((l) => ctx.measureText(l).width));
-    const bw = Math.min(CW - 16, Math.ceil(wide) + 16), bh = lines.length * 12 + 10;
+    const bw = Math.min(CW - 16, Math.ceil(wide) + 18), bh = lines.length * 15 + 12;
     const bx = Math.max(4, Math.min(CW - bw - 4, cx - bw / 2));
     const by = placeBubble(bx, Math.max(4, cy - bh), bw, bh);
 
     const fade = Math.min(1, b.t / 0.6) * Math.min(1, (b.life - b.t) / 0.18 + 0.2);
     ctx.globalAlpha = Math.max(0, Math.min(1, fade));
 
-    ctx.fillStyle = "#0f0d08ee";
-    ctx.strokeStyle = "#4a3f28";
-    ctx.lineWidth = 1;
+    ctx.fillStyle = "#0c0a08f5";
+    ctx.strokeStyle = "#6a5a38";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 3);
+    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 5);
     else ctx.rect(bx, by, bw, bh);
     ctx.fill();
     ctx.stroke();
     /* tail, only when the bubble is still directly over its speaker */
     if (Math.abs(cx - (bx + bw / 2)) < bw / 2 - 6) {
       ctx.beginPath();
-      ctx.moveTo(cx - 4, by + bh - 1);
-      ctx.lineTo(cx + 4, by + bh - 1);
-      ctx.lineTo(cx, by + bh + 6);
+      ctx.moveTo(cx - 5, by + bh - 1);
+      ctx.lineTo(cx + 5, by + bh - 1);
+      ctx.lineTo(cx, by + bh + 7);
       ctx.closePath();
-      ctx.fillStyle = "#0f0d08ee";
+      ctx.fillStyle = "#0c0a08f5";
       ctx.fill();
     }
 
-    ctx.fillStyle = "#e8e1d1";
-    lines.forEach((l, i) => ctx.fillText(l, bx + 7, by + 15 + i * 12));
+    ctx.fillStyle = "#f0e8d4";
+    ctx.textBaseline = "alphabetic";
+    lines.forEach((l, i) => ctx.fillText(l, bx + 9, by + 16 + i * 15));
     ctx.globalAlpha = 1;
   }
 
@@ -1118,82 +1298,126 @@
   function draw(S, crowd, dt) {
     fac = facilities(S);
     const L = layoutCache = V.getLayout(S);
-    cam = clampCam(cam);
+    camX = clampCamX(camX);
+    camY = clampCamY(camY);
+    camTX = clampCamX(camTX);
+    camTY = clampCamY(camTY);
 
-    if (!dragging) cam += (camTarget - cam) * Math.min(1, dt * 8);
+    if (!dragging) {
+      camX += (camTX - camX) * Math.min(1, dt * 8);
+      camY += (camTY - camY) * Math.min(1, dt * 8);
+    }
 
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = C.voidbg;
     ctx.fillRect(0, 0, CW, CH);
 
-    for (let i = 0; i < L.rooms.length; i++) {
-      drawRoom(L.rooms[i]);
-      if (i < L.rooms.length - 1) drawDoorway(L.rooms[i].x + L.rooms[i].width);
+    /* Storey bands behind everything — dark void between floors. */
+    const floors = L.floors || 1;
+    for (let f = 0; f < floors; f++) {
+      const by = f * FLOOR_PITCH;
+      ctx.fillStyle = f % 2 ? "#0c0a07" : "#0a0806";
+      ctx.fillRect(0, sy(by), CW, Math.round(FLOOR_PITCH * SCALE));
     }
 
-    /* Everything that stands on the floor is depth-sorted together, so a
-       visitor can walk behind a plinth and in front of the next one. Accession
-       labels are drawn with their piece so they stay behind the walk band. */
+    /* Rooms grouped by floor so doorways only join same-floor neighbours. */
+    const byFloor = {};
+    for (const r of L.rooms) {
+      const f = r.floor || 0;
+      (byFloor[f] = byFloor[f] || []).push(r);
+    }
+    for (const f of Object.keys(byFloor)) {
+      const list = byFloor[f].slice().sort((a, b) => a.x - b.x);
+      for (let i = 0; i < list.length; i++) {
+        drawRoom(list[i]);
+        if (i < list.length - 1) {
+          const a = list[i], b = list[i + 1];
+          if (Math.abs((a.x + a.width) - b.x) < (V.DOOR || 58) + 8) {
+            activeFloor = a.floor || 0;
+            roomLocal = true;
+            drawDoorway(a.x + a.width);
+            roomLocal = false;
+          }
+        }
+      }
+    }
+
+    /* Floor furniture + people, depth-sorted in world Y. */
+    roomLocal = false;
     const items = [];
     for (const e of L.exhibits) {
-      const ey = e.mount === "wall" ? 0 : FLOOR_Y + 8;
+      const base = V.floorBase(e.floor || 0);
+      const ey = base + (e.mount === "wall" ? 40 : FLOOR_Y + 8);
       items.push({ y: ey, fn: () => { drawExhibit(e, S); drawLabel(e); } });
     }
-    for (const bn of L.benches)
-      items.push({ y: V.BENCH_Y - 4, fn: () => drawBench(bn) });
-    for (const r of L.rooms)
-      if (r.foyer) items.push({ y: 96, fn: () => drawDeskStaff(r) });
+    for (const bn of L.benches) {
+      const base = V.floorBase(bn.floor || (bn.room && bn.room.floor) || 0);
+      items.push({ y: base + V.BENCH_Y - 4, fn: () => {
+        activeFloor = bn.floor || (bn.room && bn.room.floor) || 0;
+        roomLocal = true;
+        drawBench(bn);
+        roomLocal = false;
+      } });
+    }
+    for (const r of L.rooms) {
+      if (r.foyer) {
+        items.push({ y: V.floorBase(0) + 96, fn: () => {
+          activeFloor = 0; roomLocal = true; drawDeskStaff(r); roomLocal = false;
+        } });
+      }
+    }
     for (const a of crowd.agents)
       items.push({ y: V.feetY(a), fn: () => drawAgent(a) });
     items.sort((p, q) => p.y - q.y);
     for (const it of items) it.fn();
 
-    /* the piece currently being carried, and where it would land */
-    if (dragEx) {
-      const drop = dropTarget(pointer.x);
-      if (drop) {
-        const room = L.rooms.find((r) => r.era.id === drop.roomId);
-        if (room) {
-          let gx = room.x + V.ROOM_PAD;
-          let n = 0;
-          for (const e of room.exhibits) { if (e === dragEx.e) continue; if (n++ >= drop.index) break; gx = e.x + e.w / 2; }
-          ctx.fillStyle = "#c79a42";
-          ctx.fillRect(sx(gx) - 1, sy(30), 2, (FLOOR_Y - 30) * SCALE);
-        }
-      }
-      const b = exhibitBox(dragEx.e);
-      const aw = Math.round(b.w * SCALE), ah = Math.round(b.h * SCALE);
-      ctx.globalAlpha = 0.85;
-      ctx.drawImage(artAt(dragEx.e, b), Math.round(pointer.x - aw / 2), Math.round(pointer.y - ah / 2), aw, ah);
-      ctx.globalAlpha = 1;
-    }
-
-    /* overlay — room plaques (high on the wall), board titles, money floaters,
-       the selected wall card, and speech. Not accession plates: those are furniture. */
     for (const r of L.rooms) {
+      activeFloor = r.floor || 0;
+      roomLocal = true;
       drawRoomPlaque(r);
       drawBoardLabel(r);
+      roomLocal = false;
     }
     for (const a of crowd.agents) if (a.paid) drawPaidFloater(a);
     if (selected && !selected.board && L.exhibits.indexOf(selected) >= 0) drawWallLabel(selected);
     bubbleRects = [];
     for (const a of crowd.agents) drawBubble(a);
 
-    /* edge shading, so the strip reads as continuing past the frame */
-    const g = ctx.createLinearGradient(0, 0, CW, 0);
-    g.addColorStop(0, "#0a0806");
-    g.addColorStop(0.06, "#0a080600");
-    g.addColorStop(0.94, "#0a080600");
-    g.addColorStop(1, "#0a0806");
-    ctx.fillStyle = g;
+    /* Soft vignette on all edges */
+    const gx = ctx.createLinearGradient(0, 0, CW, 0);
+    gx.addColorStop(0, "#0a0806");
+    gx.addColorStop(0.05, "#0a080600");
+    gx.addColorStop(0.95, "#0a080600");
+    gx.addColorStop(1, "#0a0806");
+    ctx.fillStyle = gx;
     ctx.fillRect(0, 0, CW, CH);
+    const gy = ctx.createLinearGradient(0, 0, 0, CH);
+    gy.addColorStop(0, "#0a0806aa");
+    gy.addColorStop(0.08, "#0a080600");
+    gy.addColorStop(0.92, "#0a080600");
+    gy.addColorStop(1, "#0a0806aa");
+    ctx.fillStyle = gy;
+    ctx.fillRect(0, 0, CW, CH);
+
+    /* Floor label in corner */
+    if (floors > 1) {
+      const fl = Math.round(camY / FLOOR_PITCH);
+      const label = fl <= 0 ? "Ground floor" : fl === 1 ? "Upper floor" : "Floor " + fl;
+      ctx.font = "600 11px " + FONT_UI;
+      ctx.fillStyle = "#0c0a08cc";
+      ctx.fillRect(10, CH - 28, 110, 18);
+      ctx.fillStyle = "#c79a42";
+      ctx.fillText(label, 18, CH - 15);
+    }
 
     if (!L.exhibits.length) {
       ctx.textAlign = "center";
-      ctx.font = "12px ui-monospace, monospace";
-      ctx.fillStyle = "#7d7461";
+      ctx.font = "600 14px " + FONT_UI;
+      ctx.fillStyle = "#c4bba6";
       ctx.fillText("Nothing on display. The doors are not open.", CW / 2, CH / 2);
-      ctx.fillText("Lift something and put it on show.", CW / 2, CH / 2 + 18);
+      ctx.font = "13px " + FONT_UI;
+      ctx.fillStyle = "#9a907c";
+      ctx.fillText("Lift something and put it on show.", CW / 2, CH / 2 + 20);
       ctx.textAlign = "left";
     }
   }
@@ -1204,28 +1428,32 @@
 
   function currentRoom() {
     if (!layoutCache) return null;
-    return V.roomAt(layoutCache, cam + VIEW / 2);
+    const fl = Math.round(camY / FLOOR_PITCH);
+    return V.roomAt(layoutCache, camX + VIEW_W / 2, fl);
   }
 
   function goToRoom(i) {
     const rs = rooms();
     if (!rs.length) return;
     const r = rs[Math.max(0, Math.min(rs.length - 1, i))];
-    camTarget = clampCam(r.x + r.width / 2 - VIEW / 2);
+    camTX = clampCamX(r.x + r.width / 2 - VIEW_W / 2);
+    camTY = clampCamY(V.floorBase(r.floor || 0) + 10);
+  }
+
+  function goToFloor(f) {
+    camTY = clampCamY(V.floorBase(f) + 8);
   }
 
   function nudge(dir) {
-    const rs = rooms();
-    const here = currentRoom();
-    const i = rs.indexOf(here);
-    goToRoom(i + dir);
+    /* Horizontal nudge on the current storey. */
+    camTX = clampCamX(camTX + dir * 120);
   }
 
   const invalidate = () => V.invalidate();
 
   S7.galleryView = {
-    init, draw, rooms, currentRoom, goToRoom, nudge, invalidate,
+    init, draw, rooms, currentRoom, goToRoom, goToFloor, nudge, invalidate,
     setArrange, isArranging, isDragging, probe, clearSelection,
-    CW, CH, SCALE, VIEW,
+    CW, CH, SCALE, VIEW: VIEW_W, VIEW_W, VIEW_H,
   };
 })(window.S7 = window.S7 || {});

@@ -83,96 +83,73 @@
       eff: (S) => { S.mul.descent *= 1.07; S.mul.clear *= 1.05; } },
   ];
 
+  /* Museum shop: only things you can see on the floor plan — rooms, light,
+     cases, staff. No abstract +6% leaflets. Old saves may still hold levels
+     for retired ids; recompute simply ignores unknowns. */
   const MUSEUM = [
-    { id: "cases", name: "Buy display cases", base: 10, mul: 1.20, max: 40,
-      desc: (l) => "+2 display space (" + (l * 2 + 2) + " total from cases).",
+    { id: "cases", name: "Display cases", base: 12, mul: 1.22, max: 30,
+      desc: (l) => "Glass cases on the floor. +" + 2 + " display space (lvl " + (l + 1) + ").",
       flavour: "Glass, a lock, and a light that is slightly too warm.",
       unlock: () => true,
       eff: (S) => { S.bonus.capacity += 2; } },
 
-    { id: "lighting", name: "Improve the lighting", base: 14, mul: 1.22, max: 12,
-      desc: () => "+5% museum rating.",
+    { id: "lighting", name: "Gallery lighting", base: 18, mul: 1.24, max: 10,
+      desc: () => "Track lights and warm pools on the wall. +6% rating.",
       flavour: "Most of what a museum sells is light.",
       unlock: () => true,
-      eff: (S) => { S.mul.rating *= 1.05; } },
+      eff: (S) => { S.mul.rating *= 1.06; } },
 
-    { id: "labels", name: "Write proper labels", base: 18, mul: 1.23, max: 12,
-      desc: () => "+5% rating, +3% dwell time.",
+    { id: "labels", name: "Wall labels", base: 28, mul: 1.26, max: 8,
+      desc: () => "Printed cards under every piece. +5% rating, people linger.",
       flavour: "A hundred and twenty words, and no more.",
       unlock: (S) => S.stats.accessioned >= 1,
-      eff: (S) => { S.mul.rating *= 1.05; S.mul.dwell *= 1.03; } },
+      eff: (S) => { S.mul.rating *= 1.05; S.mul.dwell *= 1.05; } },
 
-    { id: "tickets", name: "Print tickets", base: 22, mul: 1.33, max: 12,
-      desc: () => "+6% spend per visitor.",
-      flavour: "Suggested donation, firmly suggested.",
-      unlock: (S) => S.stats.visitorsTotal >= 5,
-      eff: (S) => { S.mul.spend *= 1.06; } },
-
-    { id: "leaflet", name: "Leaflet the town", base: 30, mul: 1.24, max: 12,
-      desc: () => "+6% visitors.",
-      flavour: "Nobody knows you are here. That is fixable.",
-      unlock: (S) => S.stats.visitorsTotal >= 15,
-      eff: (S) => { S.mul.visitors *= 1.06; } },
-
-    { id: "plinths", name: "Commission plinths", base: 48, mul: 1.26, max: 12,
-      desc: () => "+6% rating, +1 display space.",
-      flavour: "Height is respect. Everyone knows this and nobody says it.",
-      unlock: (S) => S.stats.accessioned >= 3,
-      eff: (S) => { S.mul.rating *= 1.06; S.bonus.capacity += 1; } },
-
-    { id: "shop", name: "Open a gift shop", base: 75, mul: 1.25, max: 12,
-      desc: () => "+7% spend per visitor.",
+    { id: "shop", name: "Gift shop", base: 90, mul: 1.28, max: 8,
+      desc: (l) => (l === 0 ? "Opens a gift shop off the entrance." : "Stock the shop (lvl " + (l + 1) + ").") +
+        " Visitors buy souvenirs.",
       flavour: "Postcards, pencils, and a book nobody finishes.",
-      unlock: (S) => S.stats.visitorsTotal >= 40,
-      eff: (S) => { S.mul.spend *= 1.07; } },
+      unlock: (S) => S.stats.visitorsTotal >= 25,
+      eff: (S) => { S.mul.spend *= 1.08; } },
 
-    { id: "guides", name: "Train the volunteers", base: 110, mul: 1.27, max: 12,
-      desc: () => "+9% dwell time, +5% rating.",
-      flavour: "Enthusiasm, unpaid, and better than most audio guides.",
-      unlock: (S) => S.stats.accessioned >= 6,
-      eff: (S) => { S.mul.dwell *= 1.09; S.mul.rating *= 1.05; } },
+    { id: "cafe", name: "Museum café", base: 200, mul: 1.32, max: 8,
+      desc: (l) => (l === 0 ? "Opens a café with tables and a till." : "Expand the café (lvl " + (l + 1) + ").") +
+        " Tea, cake, longer visits.",
+      flavour: "The second most profitable room in any museum.",
+      unlock: (S) => S.stats.visitorsTotal >= 80,
+      eff: (S) => { S.mul.spend *= 1.09; S.mul.dwell *= 1.08; } },
 
-    { id: "cafe", name: "Put in a café", base: 180, mul: 1.40, max: 12,
-      desc: () => "+8% spend, +6% dwell time.",
-      flavour: "The café is the second most profitable room in any museum.",
-      unlock: (S) => S.stats.visitorsTotal >= 150,
-      eff: (S) => { S.mul.spend *= 1.08; S.mul.dwell *= 1.06; } },
+    { id: "staff", name: "Hire floor staff", base: 140, mul: 1.30, max: 8,
+      desc: () => "Cashiers and guides on the floor. +8% dwell, +5% spend.",
+      flavour: "Someone who knows where the Roman glass is.",
+      unlock: (S) => S.stats.accessioned >= 4,
+      eff: (S) => { S.mul.dwell *= 1.08; S.mul.spend *= 1.05; S.mul.rating *= 1.03; } },
 
-    { id: "climate", name: "Climate control", base: 260, mul: 1.30, max: 12,
-      desc: () => "+6% rating. Condition stops degrading on display.",
-      flavour: "Nineteen degrees, fifty per cent, forever.",
+    { id: "upper", name: "Open the upper floor", base: 480, mul: 1.45, max: 3,
+      desc: (l) => l === 0
+        ? "A second storey, stairs, and more wall for the collection."
+        : "Finish out the upper floor (lvl " + (l + 1) + "). +10 space, +8% visitors.",
+      flavour: "The trustees signed. The builders start Monday.",
       unlock: (S) => S.stats.accessioned >= 10,
+      eff: (S) => { S.bonus.capacity += 10; S.mul.visitors *= 1.08; S.mul.rating *= 1.04; } },
+
+    { id: "climate", name: "Climate control", base: 320, mul: 1.35, max: 6,
+      desc: () => "Wall units in every gallery. +6% rating.",
+      flavour: "Nineteen degrees, fifty per cent, forever.",
+      unlock: (S) => S.stats.accessioned >= 12,
       eff: (S) => { S.mul.rating *= 1.06; S.flags.climate = true; } },
 
-    { id: "wing", name: "Open a new wing", base: 420, mul: 1.32, max: 12,
-      desc: () => "+8 display space, +6% visitors.",
-      flavour: "The trustees have been persuaded.",
-      unlock: (S) => S.stats.accessioned >= 14,
-      eff: (S) => { S.bonus.capacity += 8; S.mul.visitors *= 1.06; } },
-
-    { id: "press", name: "Court the press", base: 700, mul: 1.33, max: 12,
-      desc: () => "+8% visitors.",
-      flavour: "One good Sunday feature is worth a year of leaflets.",
-      unlock: (S) => S.stats.visitorsTotal >= 800,
-      eff: (S) => { S.mul.visitors *= 1.08; } },
-
-    { id: "touring", name: "Send a touring show", base: 1600, mul: 1.35, max: 12,
-      desc: () => "+7% visitors, +6% spend.",
-      flavour: "The collection travels. The reputation travels further.",
-      unlock: (S) => S.stats.accessioned >= 25,
-      eff: (S) => { S.mul.visitors *= 1.07; S.mul.spend *= 1.06; } },
-
-    { id: "research", name: "Endow a research post", base: 3800, mul: 1.36, max: 12,
-      desc: () => "+18% Understanding, +8% rating.",
+    { id: "research", name: "Research library", base: 2200, mul: 1.40, max: 4,
+      desc: () => "A quiet room upstairs. +15% Understanding, +6% rating.",
       flavour: "Somebody whose whole job is the deep material.",
-      unlock: (S) => S.depth >= 320,
-      eff: (S) => { S.mul.understanding *= 1.18; S.mul.rating *= 1.06; } },
+      unlock: (S) => S.depth >= 200 || (S.up.upper || 0) > 0,
+      eff: (S) => { S.mul.understanding *= 1.15; S.mul.rating *= 1.06; } },
 
-    { id: "deepgal", name: "The deep gallery", base: 9000, mul: 1.52, max: 12,
-      desc: () => "+14 display space, +12% rating, +10% visitors.",
-      flavour: "Low light, thick glass, and a queue that goes round the block.",
+    { id: "deepgal", name: "The deep gallery", base: 6500, mul: 1.50, max: 4,
+      desc: () => "Low-light hall for the strangest finds. +12 space, +10% rating.",
+      flavour: "Thick glass. Soft voice. A queue that goes round the landing.",
       unlock: (S) => S.stats.deepFinds >= 1,
-      eff: (S) => { S.bonus.capacity += 14; S.mul.rating *= 1.12; S.mul.visitors *= 1.06; } },
+      eff: (S) => { S.bonus.capacity += 12; S.mul.rating *= 1.10; S.mul.visitors *= 1.06; } },
   ];
 
   /* Research is bought with Understanding, not money, and each line is bought
