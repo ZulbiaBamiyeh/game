@@ -220,6 +220,25 @@
 
   let nextId = 1;
 
+  /* How many stops a person will make. Scales with the collection so a full
+     museum gets a proper walk-through, not a glance at the first room and out. */
+  function visitBudget(rng, L, def) {
+    const n = L && L.exhibits ? L.exhibits.length : 0;
+    if (n <= 0) return 0;
+    const galleryRooms = L.rooms
+      ? L.rooms.filter((r) => r.exhibits && r.exhibits.length).length
+      : 1;
+    /* Roughly a piece per gallery, plus a few extras — enough to cross the
+       building. Scholars linger; tourists cover ground; elders do less. */
+    let base = Math.min(n, Math.max(4, galleryRooms + 2 + Math.floor(n * 0.18)));
+    if (def.dwell) base = Math.round(base * 1.55);
+    if (def.camera) base = Math.round(base * 1.25);
+    if (def.stick) base = Math.round(base * 0.8);
+    if (def.group || def.small) base = Math.round(base * 0.9);
+    if (def.staff) base = Math.round(base * 1.7);
+    return Math.max(3, Math.min(n, base + rng.int(-1, 3)));
+  }
+
   /* `where` is a strip x for someone already inside; leave it out and they
      come in through the street doors and pay like everybody else. */
   function spawn(rng, L, where) {
@@ -228,6 +247,7 @@
     const sprite = S7.people.makePerson(rng.int(1, 1e9), type);
     const arriving = where === undefined;
     const x = arriving ? DOOR_X - 18 - rng.range(0, 8) : where;
+    const visits = visitBudget(rng, L, def);
     return {
       id: nextId++,
       type, def, sprite,
@@ -242,7 +262,9 @@
       pose: 0,
       timer: 0,
       target: null,
-      visits: rng.int(2, 7),
+      visits,
+      tourTotal: visits,
+      seen: new Set(),
       bubble: null,
       flash: 0,
       phase: rng.range(0, 4),
@@ -313,19 +335,51 @@
   const feetY = (a) => (a.state === "sit" ? BENCH_Y : WALK_FAR + a.z * (WALK_NEAR - WALK_FAR));
   const scaleOf = (a) => (0.82 + a.z * 0.30) * a.def.scale;
 
-  /* Pick something to walk to. Prefers exhibits near where they already are,
-     because a crowd that teleports its attention across the building looks
-     wrong even when you cannot say why. */
+  /* Pick the next stop on someone's tour. They keep a list of what they have
+     already looked at, push deeper into the building early on, and only
+     settle for nearby pieces once they have covered some ground — otherwise
+     everyone piles up in the first gallery and never reaches the rest. */
   function chooseTarget(rng, L, a) {
     if (!L.exhibits.length) return null;
-    const near = L.exhibits.filter((e) => Math.abs(e.x - a.x) < 260);
-    const pool = near.length ? near : L.exhibits;
+    if (!a.seen) a.seen = new Set();
+    const unseen = L.exhibits.filter((e) => !a.seen.has(e.a.no));
+    /* Finished the collection: leave rather than re-doing the foyer loop. */
+    if (!unseen.length) return null;
+
+    let minX = Infinity, maxX = -Infinity;
+    for (const e of L.exhibits) {
+      if (e.x < minX) minX = e.x;
+      if (e.x > maxX) maxX = e.x;
+    }
+    const span = Math.max(80, maxX - minX);
+    const total = Math.max(1, a.tourTotal || a.visits || 1);
+    const done = Math.max(0, total - a.visits) / total;   /* 0 at start → 1 at end */
+    /* Ideal depth along the strip: start near the door, march inward, then
+       free-range toward the end of the tour. */
+    const ideal = minX + span * Math.min(1, 0.12 + done * 0.95 + rng.range(0, 0.12));
+
     let best = null, bestScore = -1e9;
-    for (let i = 0; i < 4; i++) {
-      const e = rng.pick(pool);
-      const score = -Math.abs(e.x - a.x) * 0.4 + rng.range(0, 90) +
-                    (e.a.rarity.mult > 2 ? 40 : 0) +
-                    (e.a.kind === "painting" ? 12 : 0);
+    const samples = Math.min(unseen.length, 10);
+    for (let i = 0; i < samples; i++) {
+      const e = rng.pick(unseen);
+      const dist = Math.abs(e.x - a.x);
+      let score = rng.range(0, 35);
+      /* Skip the piece they are already standing at. */
+      if (dist < 36) score -= 120;
+      else if (dist < 90) score -= 25;
+      /* Pull toward the tour frontier so the walk covers the building. */
+      score -= Math.abs(e.x - ideal) * 0.22;
+      /* Early on, prefer further in (positive x). Late, either way is fine. */
+      if (e.x > a.x) score += 28 * (1 - done * 0.55);
+      else score -= 8 * (1 - done);
+      /* Rare and painted pieces still draw a crowd. */
+      if (e.a.rarity.mult > 2) score += 32;
+      if (e.a.rarity.mult > 3.5) score += 18;
+      if (e.a.kind === "painting") score += 10;
+      if (e.a.kind === "sculpture") score += 6;
+      /* Long walks are fine — a museum is supposed to be walked — but do not
+         always teleport attention to the far end in one hop. */
+      if (dist > span * 0.55 && done < 0.35) score -= 15;
       if (score > bestScore) { bestScore = score; best = e; }
     }
     return best;
@@ -367,13 +421,25 @@
     state.overflow = Math.max(0, Math.round(inside) - want);
 
     /* On the first tick after opening the tab, fill the building rather than
-       making the player watch forty people walk in from the car park. */
+       making the player watch forty people walk in from the car park. Spread
+       them along the whole strip so the deep galleries are not empty. */
     if (!state.seeded && want > 0 && L.exhibits.length) {
       state.seeded = true;
       for (let i = 0; i < want; i++) {
-        const e = rng.pick(L.exhibits);
+        const qi = Math.min(L.exhibits.length - 1,
+          Math.floor(((i + rng.range(0, 0.9)) / want) * L.exhibits.length));
+        const e = L.exhibits[qi] || rng.pick(L.exhibits);
         const a = spawn(rng, L, e.x + rng.range(-90, 90));
-        if (rng.chance(0.45)) { a.state = "view"; a.target = e; a.x = e.x + a.groupOffset; a.timer = rng.range(1, 7); }
+        /* Already part-way through their tour, so they do not all leave at once. */
+        const spent = rng.int(0, Math.max(0, a.tourTotal - 2));
+        a.visits = Math.max(1, a.tourTotal - spent);
+        if (rng.chance(0.5)) {
+          a.state = "view";
+          a.target = e;
+          a.seen.add(e.a.no);
+          a.x = e.x + a.groupOffset;
+          a.timer = rng.range(1, 7) * (a.def.dwell || 1);
+        }
         state.agents.push(a);
       }
     }
@@ -445,19 +511,24 @@
         }
       } else if (a.state === "walk") {
         if (!a.target) {
+          if (a.visits <= 0) { a.state = "leave"; continue; }
           a.target = chooseTarget(rng, L, a);
           if (!a.target) { a.state = "leave"; continue; }
         }
         const tx = a.target.x + a.groupOffset;
         const d = tx - a.x;
         a.dir = d < 0 ? -1 : 1;
-        a.x += Math.sign(d) * Math.min(Math.abs(d), a.speed * dt);
-        a.phase += a.speed * dt * 0.55;
+        /* Cross the building at a purposeful pace; amble only when close. */
+        const v = a.speed * (Math.abs(d) > 160 ? 1.45 : Math.abs(d) > 80 ? 1.15 : 1);
+        a.x += Math.sign(d) * Math.min(Math.abs(d), v * dt);
+        a.phase += v * dt * 0.55;
         /* drift toward the front of the band as they approach, so viewers do
            not all stand in a single line */
         a.z += (0.35 + (a.id % 7) / 12 - a.z) * dt * 0.6;
         if (Math.abs(d) < 1.5) {
           a.state = "view";
+          if (!a.seen) a.seen = new Set();
+          a.seen.add(a.target.a.no);
           a.timer = rng.range(3, 8) * (a.def.dwell || 1);
           if (rng.chance(0.62))
             say(state, a, S7.remarks.forExhibit(rng, a.target.a, a.type), rng.range(3.4, 5.4));
@@ -468,7 +539,7 @@
         }
       } else if (a.state === "view") {
         a.timer -= dt;
-        if (!a.bubble && rng.chance(dt * 0.22))
+        if (a.target && !a.bubble && rng.chance(dt * 0.22))
           say(state, a, S7.remarks.forExhibit(rng, a.target.a, a.type), rng.range(3.2, 5));
         if (a.timer <= 0) {
           a.visits--;
