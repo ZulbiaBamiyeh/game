@@ -176,6 +176,38 @@
     };
   }
 
+  /* Open-air sculpture court on the upper floor — sky, gravel, outdoor mounts. */
+  function makeCourtyard(x, width, floor, items) {
+    const exhibits = [];
+    let cx = x + 48;
+    for (let i = 0; i < items.length; i++) {
+      const a = items[i];
+      const phys = S7.artifacts.physical(a);
+      const bay = Math.max(phys.w + 12, 52);
+      exhibits.push({
+        a, x: cx + bay / 2, w: phys.w, h: phys.h,
+        mount: "outdoor", index: i, phys,
+      });
+      cx += bay + 28;
+    }
+    const contentW = exhibits.length ? (cx - x + 40) : width;
+    const w = Math.max(width, contentW);
+    const benches = [{
+      x: x + w / 2, y: BENCH_Y,
+      seats: [x + w / 2 - 14, x + w / 2, x + w / 2 + 14]
+        .map((sxx) => ({ x: sxx, taken: null })),
+    }];
+    return {
+      era: {
+        id: "courtyard", name: "Sculpture court",
+        period: "open air", short: "Courtyard",
+      },
+      x, width: w, floor: floor != null ? floor : 1,
+      exhibits, items, benches,
+      courtyard: true, featured: true,
+    };
+  }
+
   function layout(S) {
     const shown = S.collection.filter((a) => a.display !== false);
     const byRoom = new Map();
@@ -289,32 +321,68 @@
     const groundGals = restGals.slice(0, split);
     const upperGals = restGals.slice(split);
 
+    /* Stairwell after amenities so upper/basement stack on the same X as the
+       galleries — a true cutaway, not a floor offset to the right. */
+    const stairWellX = ground.x;
+    let basStairX = stairWellX;
+    if (hasUpper) {
+      rooms.push(makeStairs(stairWellX, 0, 1));
+      ground.x += STAIRS_W + DOOR;
+      basStairX = ground.x;
+    }
+    if (hasBasement) {
+      rooms.push(makeStairs(basStairX, 0, -1));
+      ground.x += STAIRS_W + DOOR;
+    }
+    const galStartX = ground.x;
+
     for (const b of groundGals)
       pushGalleryRoom(rooms, ground, b.meta, b.items, 0, roomPad);
 
-    /* Stairs at the end of the ground run. */
-    let stairsUpX = ground.x;
+    /* Upper floor: same X as ground galleries, directly above. */
     if (hasUpper) {
-      rooms.push(makeStairs(ground.x, 0, 1));
-      stairsUpX = ground.x;
-      ground.x += STAIRS_W + DOOR;
-    }
+      rooms.push(makeStairs(stairWellX, 1, 0));
+      const upper = { x: galStartX };
 
-    /* Basement stair — deep gallery lives below ground, not above. */
-    let stairsDownX = ground.x;
-    if (hasBasement) {
-      rooms.push(makeStairs(ground.x, 0, -1));
-      stairsDownX = ground.x;
-      ground.x += STAIRS_W + DOOR;
-    }
+      /* Split overflow halls around an open courtyard. */
+      const mid = Math.max(1, Math.ceil(upperGals.length / 2));
+      const leftGals = upperGals.slice(0, mid);
+      const rightGals = upperGals.slice(mid);
+      /* Outdoor pieces: prefer sculptures from the right-hand pool. */
+      const courtItems = [];
+      const rightKept = [];
+      for (const b of rightGals) {
+        const outdoors = b.items.filter((a) => a.kind === "sculpture" || a.kind === "object");
+        const take = outdoors.slice(0, Math.min(2, outdoors.length));
+        courtItems.push.apply(courtItems, take);
+        const taken = new Set(take);
+        const rest = b.items.filter((a) => !taken.has(a));
+        if (rest.length) rightKept.push({ meta: b.meta, items: rest });
+      }
+      /* If still empty, borrow a couple from left galleries. */
+      if (courtItems.length < 2) {
+        for (const b of leftGals) {
+          for (const a of b.items) {
+            if (courtItems.length >= 3) break;
+            if (a.kind === "sculpture" || a.kind === "object") courtItems.push(a);
+          }
+        }
+      }
+      const courtTaken = new Set(courtItems);
+      const leftKept = leftGals.map((b) => ({
+        meta: b.meta,
+        items: b.items.filter((a) => !courtTaken.has(a)),
+      })).filter((b) => b.items.length);
 
-    /* Upper floor: above ground (floor +1). Research + overflow galleries. */
-    if (hasUpper) {
-      const upper = { x: stairsUpX };
-      rooms.push(makeStairs(upper.x, 1, 0));
-      upper.x += STAIRS_W + DOOR;
+      for (const b of leftKept)
+        pushGalleryRoom(rooms, upper, b.meta, b.items, 1, roomPad);
 
-      for (const b of upperGals)
+      const courtW = 220 + Math.min(4, upperLvl) * 16;
+      const court = makeCourtyard(upper.x, courtW, 1, courtItems.slice(0, 4));
+      rooms.push(court);
+      upper.x = court.x + court.width + DOOR;
+
+      for (const b of rightKept)
         pushGalleryRoom(rooms, upper, b.meta, b.items, 1, roomPad);
 
       if (researchLvl > 0) {
@@ -325,18 +393,18 @@
         upper.x += rw + DOOR;
       }
 
-      if (upperGals.length === 0 && researchLvl <= 0) {
+      if (leftKept.length === 0 && rightKept.length === 0 && researchLvl <= 0 &&
+          courtItems.length === 0) {
         rooms.push(amenityRoom("landing", "Upper landing", "awaiting hang", 200, upper.x, 1, {
           wing: true, wingIndex: 0,
         }));
       }
     }
 
-    /* Basement: below ground (floor −1). Low light, deep material. */
+    /* Basement: stacked under the gallery run, same X as ground halls. */
     if (hasBasement) {
-      const bas = { x: stairsDownX };
-      rooms.push(makeStairs(bas.x, -1, 0));
-      bas.x += STAIRS_W + DOOR;
+      rooms.push(makeStairs(basStairX, -1, 0));
+      const bas = { x: galStartX };
       if (deepGals.length) {
         for (const b of deepGals) {
           pushGalleryRoom(rooms, bas, b.meta, b.items, -1, roomPad + deepLvl * 4);
@@ -344,7 +412,6 @@
           last.deepgal = deepLvl;
         }
       } else {
-        /* No deep finds on show yet — keep an empty hall with placeholder cases. */
         const dw = 220 + Math.min(6, deepLvl) * 14;
         rooms.push(amenityRoom("deepgal", "The deep gallery", "low light · thick glass", dw, bas.x, -1, {
           deepgal: deepLvl,
@@ -768,14 +835,51 @@
     return best;
   }
 
-  const localFeetY = (a) => (a.state === "sit" || a.state === "climb"
+  const localFeetY = (a) => (a.state === "sit"
     ? BENCH_Y : WALK_FAR + a.z * (WALK_NEAR - WALK_FAR));
-  const feetY = (a) => worldY(a.floor || 0, localFeetY(a));
+  /* During climb, lerp world Y between storeys so the cutaway shows people
+     actually going up and down the stair well. */
+  const feetY = (a) => {
+    if (a.state === "climb" && a.climb && a.climb.duration > 0) {
+      const t = 1 - Math.max(0, Math.min(1, a.timer / a.climb.duration));
+      const ease = t * t * (3 - 2 * t);
+      const y0 = worldY(a.climb.fromFloor, BENCH_Y - 4);
+      const y1 = worldY(a.climb.toFloor, BENCH_Y - 4);
+      return y0 + (y1 - y0) * ease;
+    }
+    return worldY(a.floor || 0, localFeetY(a));
+  };
   const scaleOf = (a) => (0.82 + a.z * 0.30) * a.def.scale;
 
   function stairsOnFloor(L, floor) {
     if (!L || !L.stairs) return null;
     for (const s of L.stairs) if ((s.floor || 0) === (floor || 0)) return s;
+    return null;
+  }
+
+  /* Prefer a stair that actually leads toward the destination floor. */
+  function stairsToward(L, fromFloor, toFloor) {
+    if (!L || !L.stairs) return null;
+    const from = fromFloor || 0, to = toFloor || 0;
+    for (const s of L.stairs)
+      if ((s.floor || 0) === from && s.stairsTo === to) return s;
+    for (const s of L.stairs) {
+      if ((s.floor || 0) !== from) continue;
+      if (to > from && s.stairsTo > from) return s;
+      if (to < from && s.stairsTo < from) return s;
+    }
+    for (const s of L.stairs)
+      if ((s.floor || 0) === from && s.stairsTo === 0) return s;
+    return stairsOnFloor(L, from);
+  }
+
+  function stairsLanding(L, floor, fromFloor) {
+    if (!L || !L.stairs) return null;
+    const fl = floor || 0, from = fromFloor || 0;
+    for (const s of L.stairs)
+      if ((s.floor || 0) === fl && s.stairsTo === from) return s;
+    for (const s of L.stairs)
+      if ((s.floor || 0) === fl) return s;
     return null;
   }
 
@@ -831,16 +935,27 @@
     if (!target) return false;
     const eFloor = target.floor !== undefined ? target.floor
       : (target.room && target.room.floor) || 0;
-    if (eFloor === (a.floor || 0)) {
+    const from = a.floor || 0;
+    if (eFloor === from) {
       a.target = target;
       return true;
     }
-    const stairs = stairsOnFloor(L, a.floor || 0);
+    /* Step toward the destination; multi-flight (upper↔basement) goes via ground. */
+    let stepTo = eFloor;
+    if (from !== 0 && eFloor !== 0 && Math.sign(eFloor) !== Math.sign(from))
+      stepTo = 0;
+    else if (from !== 0 && eFloor !== 0 && from !== eFloor &&
+             !L.stairs.some((s) => (s.floor || 0) === from && s.stairsTo === eFloor))
+      stepTo = 0;
+    const stairs = stairsToward(L, from, stepTo);
     if (!stairs) {
       a.target = target;
       return true;
     }
-    a.climb = { toFloor: eFloor, after: target, stairs };
+    a.climb = {
+      toFloor: stairs.stairsTo, after: target, stairs,
+      fromFloor: from, duration: 0,
+    };
     a.state = "toStairs";
     a.target = null;
     a.stateAge = 0;
@@ -1008,20 +1123,27 @@
         if (approach(a, gx, dt, 1.3, 3) || (a.stateAge || 0) > 16) {
           a.x = gx;
           a.state = "climb";
-          a.timer = rng.range(1.4, 2.4);
+          const dur = rng.range(1.6, 2.8);
+          a.timer = dur;
+          if (a.climb) {
+            a.climb.duration = dur;
+            a.climb.fromFloor = a.floor || 0;
+            a.climb.toFloor = st.stairsTo;
+          }
           a.stateAge = 0;
           a.stuck = 0;
         }
       } else if (a.state === "climb") {
         a.timer -= dt;
         a.phase += dt * 3;
-        /* Bob on the stairs */
+        /* Bob on the stairs while rising/descending between storeys. */
         a.z = 0.45 + Math.sin(a.phase * 4) * 0.08;
         if (a.timer <= 0) {
+          const from = a.climb ? a.climb.fromFloor : (a.floor || 0);
           const to = a.climb ? a.climb.toFloor : 0;
           const after = a.climb ? a.climb.after : null;
           a.floor = to;
-          const land = stairsOnFloor(L, to);
+          const land = stairsLanding(L, to, from);
           if (land) a.x = land.serviceX || (land.x + land.width / 2);
           a.climb = null;
           a.stuck = 0;
@@ -1039,9 +1161,12 @@
           if (a.visits <= 0) {
             if ((a.floor || 0) !== 0) {
               /* Return to ground before leaving. */
-              const st = stairsOnFloor(L, a.floor);
+              const st = stairsToward(L, a.floor, 0);
               if (st) {
-                a.climb = { toFloor: 0, after: null, stairs: st };
+                a.climb = {
+                  toFloor: st.stairsTo, after: null, stairs: st,
+                  fromFloor: a.floor || 0, duration: 0,
+                };
                 a.state = "toStairs";
                 a.stateAge = 0;
                 continue;
@@ -1286,9 +1411,12 @@
         }
       } else {                                   /* leaving */
         if ((a.floor || 0) !== 0) {
-          const st = stairsOnFloor(L, a.floor);
+          const st = stairsToward(L, a.floor, 0);
           if (st) {
-            a.climb = { toFloor: 0, after: null, stairs: st };
+            a.climb = {
+              toFloor: st.stairsTo, after: null, stairs: st,
+              fromFloor: a.floor || 0, duration: 0,
+            };
             a.state = "toStairs";
             a.stateAge = 0;
             continue;

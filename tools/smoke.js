@@ -189,6 +189,15 @@ function serve() {
     /* Upper must sit above ground in world Y (negative base). */
     if (!(S7.visitors.floorBase(1) < S7.visitors.floorBase(0)))
       return "upper not above ground";
+    /* Upper must share X with ground (stacked cutaway, not offset to the right). */
+    const g0 = L.rooms.find((r) => (r.floor || 0) === 0 && r.exhibits && r.exhibits.length);
+    const u0 = L.rooms.find((r) => r.floor === 1 && r.exhibits && r.exhibits.length);
+    const stairs0 = L.rooms.find((r) => r.stairs && (r.floor || 0) === 0 && r.stairsTo === 1);
+    const stairs1 = L.rooms.find((r) => r.stairs && r.floor === 1);
+    if (stairs0 && stairs1 && Math.abs(stairs0.x - stairs1.x) > 4)
+      return "stairwell not vertically aligned";
+    if (g0 && u0 && u0.x > g0.x + g0.width + 200)
+      return "upper floor offset too far right of ground";
     S.up.deepgal = 1;
     /* Deep-time finds should hang in the basement once the deep gallery opens. */
     for (let i = 0; i < 6; i++) {

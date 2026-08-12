@@ -248,7 +248,9 @@
   }
 
   function roomHasBoard(r) {
-    return !!(r && r.era && !r.foyer && !r.amenity && r.exhibits && r.exhibits.length);
+    if (!r || !r.era || r.foyer || r.stairs || r.shop || r.cafe || r.researchRoom) return false;
+    if (r.courtyard) return true;
+    return !!(r.exhibits && r.exhibits.length && !r.amenity);
   }
 
   /* Theme tint for special halls so Egypt / dinosaurs / minerals read as
@@ -279,15 +281,17 @@
       const top = Math.max(ceil, bottom - h);
       return { x: e.x - w / 2, y: base + top, w, h: bottom - top, base };
     }
-    if (e.mount === "plinth") {
-      /* Plinth cap sits in the lower half of the wall; tall pieces sit on a
-         lower cap so the head never punches through the ceiling. */
+    if (e.mount === "plinth" || e.mount === "outdoor") {
+      /* Plinth / outdoor pedestal sits in the lower half of the wall; tall
+         pieces sit on a lower cap so the head never punches through. */
       let plinthTop = Math.max(FLOOR_Y - 48, Math.min(FLOOR_Y - 4, Math.round(74 + h / 2)));
+      if (e.mount === "outdoor")
+        plinthTop = Math.max(FLOOR_Y - 40, Math.min(FLOOR_Y - 8, Math.round(80 + h / 3)));
       if (plinthTop - h < ceil) plinthTop = Math.min(FLOOR_Y - 4, ceil + h);
       const artTop = Math.max(ceil, plinthTop - h);
       return {
         x: e.x - w / 2, y: base + artTop, w, h: plinthTop - artTop,
-        plinthTop: base + plinthTop, base,
+        plinthTop: base + plinthTop, base, outdoor: e.mount === "outdoor",
       };
     }
     /* Case: shelf line fixed near eye level; art + glass clamped under ceil. */
@@ -507,15 +511,23 @@
 
     roomLocal = true;
     const dim = !!r.deepgal;
-    drawWall(x0, r.width, themeWall(r));
-    drawFloor(x0, r.width);
-    drawCeiling(x0, r.width, dim);
+    if (!r.courtyard) {
+      drawWall(x0, r.width, themeWall(r));
+      drawFloor(x0, r.width);
+      drawCeiling(x0, r.width, dim);
+    }
 
     if (r.foyer) { drawFoyer(r); roomLocal = false; return; }
     if (r.stairs) { drawStairs(r); roomLocal = false; return; }
     if (r.shop) { drawGiftShop(r); roomLocal = false; return; }
     if (r.cafe) { drawCafe(r); roomLocal = false; return; }
     if (r.researchRoom) { drawResearchRoom(r); roomLocal = false; return; }
+    if (r.courtyard) {
+      drawCourtyard(r);
+      if (roomHasBoard(r)) drawInfoBoard(r);
+      roomLocal = false;
+      return;
+    }
     if (r.wing) { drawWingRoom(r); roomLocal = false; return; }
     /* Empty deep gallery only — rooms with finds fall through to normal hang. */
     if (r.deepgal && (!r.exhibits || !r.exhibits.length)) {
@@ -985,6 +997,125 @@
 
   }
 
+  /* Open-air sculpture court — sky, gravel, fountain, outdoor pedestals. */
+  function drawCourtyard(r) {
+    const x0 = r.x, x1 = r.x + r.width, w = r.width;
+
+    /* Evening sky wash (museum night + residual dusk) */
+    for (let y = 0; y < FLOOR_Y; y++) {
+      const t = y / FLOOR_Y;
+      const col = t < 0.35 ? "#1a2438" : t < 0.65 ? "#243044" : t < 0.85 ? "#2e3a48" : "#3a4238";
+      rect(x0, y, w, 1, col);
+    }
+    /* Soft cloud bands */
+    ctx.globalAlpha = 0.12;
+    for (let i = 0; i < 4; i++) {
+      const cy = 18 + i * 14;
+      rect(x0 + 20 + i * 40, cy, 50 + (i % 2) * 20, 6, "#8a9aaa");
+    }
+    ctx.globalAlpha = 1;
+    /* Warm window glow from museum wings on either side */
+    const gL = ctx.createLinearGradient(sx(x0), 0, sx(x0 + 40), 0);
+    gL.addColorStop(0, "rgba(255,200,120,0.14)");
+    gL.addColorStop(1, "rgba(255,200,120,0)");
+    ctx.fillStyle = gL;
+    ctx.fillRect(sx(x0), syR(0), Math.round(50 * SCALE), Math.round(FLOOR_Y * SCALE));
+    const gR = ctx.createLinearGradient(sx(x1), 0, sx(x1 - 40), 0);
+    gR.addColorStop(0, "rgba(255,200,120,0.14)");
+    gR.addColorStop(1, "rgba(255,200,120,0)");
+    ctx.fillStyle = gR;
+    ctx.fillRect(sx(x1) - Math.round(50 * SCALE), syR(0), Math.round(50 * SCALE), Math.round(FLOOR_Y * SCALE));
+
+    /* Low parapet / gallery walls opening onto the court */
+    rect(x0, WALL_TOP, 10, FLOOR_Y - WALL_TOP, "#3a3426");
+    rect(x1 - 10, WALL_TOP, 10, FLOOR_Y - WALL_TOP, "#3a3426");
+    rect(x0, WALL_TOP, 10, 3, "#5a4e35");
+    rect(x1 - 10, WALL_TOP, 10, 3, "#5a4e35");
+    /* Coping stones along the open edges */
+    rect(x0 + 10, FLOOR_Y - 10, w - 20, 4, "#5a5448");
+    rect(x0 + 10, FLOOR_Y - 10, w - 20, 1, "#7a7468");
+
+    /* Gravel / flagstone court floor */
+    for (let y = FLOOR_Y; y < V.H; y++) {
+      const t = (y - FLOOR_Y) / (V.H - FLOOR_Y);
+      rect(x0, y, w, 1, t < 0.3 ? "#3a3428" : t < 0.7 ? "#423a2c" : "#4a4030");
+    }
+    ctx.globalAlpha = 0.35;
+    for (let y = FLOOR_Y + 4; y < V.H - 4; y += 5) {
+      rect(x0 + 4, y, w - 8, 1, "#2a2418");
+      for (let px = x0 + 8 + (y % 10); px < x1 - 8; px += 14)
+        rect(px, y + 1, 1, 3, "#2a2418");
+    }
+    ctx.globalAlpha = 1;
+    /* Central path of pale flagstones */
+    const pathW = Math.min(36, w * 0.2);
+    rect(x0 + (w - pathW) / 2, FLOOR_Y + 2, pathW, V.H - FLOOR_Y - 6, "#5a5240");
+    rect(x0 + (w - pathW) / 2, FLOOR_Y + 2, pathW, 1, "#7a7260");
+
+    /* Columns framing the court */
+    for (const cx of [x0 + 22, x1 - 22]) {
+      rect(cx - 5, WALL_TOP + 4, 10, FLOOR_Y - WALL_TOP - 12, "#5a5448");
+      rect(cx - 7, WALL_TOP + 2, 14, 5, "#7a7468");
+      rect(cx - 8, FLOOR_Y - 10, 16, 6, "#4a443c");
+      rect(cx - 3, WALL_TOP + 10, 2, FLOOR_Y - WALL_TOP - 22, "#8a8478");
+    }
+
+    /* Fountain basin in the middle when the bay is wide enough */
+    if (w > 160) {
+      const fx = x0 + w / 2;
+      rect(fx - 18, FLOOR_Y + 8, 36, 6, "#4a5248");
+      rect(fx - 16, FLOOR_Y + 6, 32, 4, "#6a7a72");
+      rect(fx - 10, FLOOR_Y - 2, 20, 10, "#5a6a62");
+      rect(fx - 3, FLOOR_Y - 14, 6, 14, "#7a8a82");
+      rect(fx - 5, FLOOR_Y - 16, 10, 4, "#9aaab2");
+      /* Water glints */
+      ctx.globalAlpha = 0.35;
+      rect(fx - 12, FLOOR_Y + 8, 8, 2, "#a8c8d8");
+      rect(fx + 2, FLOOR_Y + 9, 10, 2, "#a8c8d8");
+      ctx.globalAlpha = 0.2;
+      rect(fx - 1, FLOOR_Y - 20, 2, 6, "#c8e0f0");
+      rect(fx + 2, FLOOR_Y - 18, 2, 5, "#c8e0f0");
+      ctx.globalAlpha = 1;
+    }
+
+    /* Planters along the walls */
+    for (const px of [x0 + 40, x0 + w * 0.28, x1 - 40, x0 + w * 0.72]) {
+      if (px < x0 + 30 || px > x1 - 30) continue;
+      rect(px - 7, FLOOR_Y - 8, 14, 10, "#5a4230");
+      rect(px - 7, FLOOR_Y - 8, 14, 2, "#6f5340");
+      for (let i = 0; i < 5; i++) {
+        const a = -2.0 + i * 0.5;
+        const len = 8 + (i % 2) * 4;
+        ctx.strokeStyle = i % 2 ? "#3d6b45" : "#5a8a52";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx(px), syR(FLOOR_Y - 10));
+        ctx.quadraticCurveTo(
+          sx(px + Math.cos(a) * len * 0.5), syR(FLOOR_Y - 14 + Math.sin(a) * 3),
+          sx(px + Math.cos(a) * len), syR(FLOOR_Y - 10 + Math.sin(a) * len * 0.6));
+        ctx.stroke();
+      }
+    }
+
+    /* String lights between the columns */
+    ctx.globalAlpha = 0.5;
+    rect(x0 + 24, 36, w - 48, 1, "#5a4e35");
+    ctx.globalAlpha = 1;
+    for (let lx = x0 + 32; lx < x1 - 28; lx += 18) {
+      rect(lx - 1, 36, 3, 3, "#ffe6ad");
+      const bulb = ctx.createRadialGradient(sx(lx), syR(40), 1, sx(lx), syR(40), 12);
+      bulb.addColorStop(0, "rgba(255,230,173,0.22)");
+      bulb.addColorStop(1, "rgba(255,230,173,0)");
+      ctx.fillStyle = bulb;
+      ctx.fillRect(sx(lx) - 14, syR(30), 28, 24);
+    }
+
+    /* Bench already drawn later; a second garden bench silhouette */
+    rect(x0 + w * 0.22 - 14, 140, 28, 3, "#4a5a40");
+    rect(x0 + w * 0.22 - 12, 143, 3, 6, "#3a4a30");
+    rect(x0 + w * 0.22 + 9, 143, 3, 6, "#3a4a30");
+  }
+
   /* Building mass for upper/basement so the cutaway is never a black hole.
      When `locked`, add construction clutter and a "not open" plate. When open,
      just the structure shows behind rooms that don't span the full width. */
@@ -1334,12 +1465,22 @@
       lightArt(b, aw, ah);
       if (ring) outlineBox(b, ring);
       if (b.y > railW + 2) rect(e.x - 1, railW, 1, b.y - railW, "#5a4e35");
-    } else if (e.mount === "plinth") {
+    } else if (e.mount === "plinth" || e.mount === "outdoor") {
       const pTop = b.plinthTop;
       const pH = Math.max(4, floorW + 8 - pTop);
       spotlight(e.x, base + 30, pTop, base);
       const pw = Math.max(14, Math.round(b.w * 0.78));
-      if (plinths <= 0) {
+      if (e.mount === "outdoor") {
+        /* Weathered stone pedestal for the open court. */
+        const body = "#6a6258", top = "#8a8274", shade = "#4a443c";
+        rect(e.x - pw / 2 - 2, pTop + pH - 4, pw + 4, 4, "#5a5448");
+        rect(e.x - pw / 2, pTop, pw, pH, body);
+        rect(e.x - pw / 2, pTop, pw, 3, top);
+        rect(e.x + pw / 2 - 4, pTop + 3, 4, Math.max(2, pH - 5), shade);
+        rect(e.x - pw / 2 - 1, pTop - 1, pw + 2, 1, "#a09a8a");
+        for (let y = pTop + 6; y < pTop + pH - 4; y += 4)
+          rect(e.x - pw / 2 + 2, y, pw - 4, 1, "#00000018");
+      } else if (plinths <= 0) {
         rect(e.x - pw / 2, pTop, pw, pH, "#5a4a30");
         rect(e.x - pw / 2, pTop, pw, 2, "#6b5a3a");
         for (let y = pTop + 4; y < floorW + 4; y += 5)
@@ -1359,7 +1500,7 @@
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
       lightArt(b, aw, ah);
       if (ring) outlineBox(b, ring);
-      if (plinths >= 1) {
+      if (e.mount !== "outdoor" && plinths >= 1) {
         const rw = Math.max(pw + 8, 26);
         const ropeCol = plinths >= 5 ? "#c79a42" : C.rope;
         rect(e.x - rw / 2, floorW + 14, 1, 6, ropeCol);
