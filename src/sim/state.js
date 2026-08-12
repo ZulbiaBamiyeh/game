@@ -145,12 +145,33 @@
              S7.cultures.eraAt(S.depth).find * (1 + S.depth / 700) *
              S.mul.findGap / (1 + S.red.findGap));
 
-  const grantRate = (S) => (0.30 + S.depth * 0.005) * S.mul.grant * (1 + S.add.grant);
+  /* Last fortnight's average day at the door. What the Institute's grant is
+     actually set on — public money follows the turnstile. */
+  function attendance(S) {
+    if (!S.history || !S.history.length) return S.today ? S.today.visitors : 0;
+    let sum = 0;
+    for (const d of S.history) sum += d.visitors;
+    return sum / S.history.length;
+  }
+
+  /* Public funding: saturating, so it is a floor under a quiet museum rather
+     than a second income to optimise. It exists to make the admission price a
+     real decision — charge well over the going rate and you take more at the
+     till, but the thinner gate costs you the grant, and the two roughly
+     cancel. Whether you want a full house or a dear one is then a taste. */
+  const publicFunding = (S) => {
+    const a = attendance(S);
+    return 30 * a / (a + 2500);
+  };
+
+  const grantRate = (S) =>
+    (0.30 + S.depth * 0.005 + publicFunding(S)) * S.mul.grant * (1 + S.add.grant);
 
   const staminaPeriod = (S) => Math.max(0.25, 1.5 * S.mul.stamRate / (1 + S.red.stamRate));
 
   S7.state = {
     VERSION, fresh, recompute,
     descentRate, clearRate, findGap, grantRate, staminaPeriod, siteBonus, resistance, atFloor,
+    attendance, publicFunding,
   };
 })(window.S7 = window.S7 || {});

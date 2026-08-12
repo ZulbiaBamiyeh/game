@@ -105,9 +105,12 @@
   function priceFactor(S, sv) {
     const suggested = suggestedPrice(sv);
     const p = Math.max(0, S.admission);
-    /* Free entry is worth about a 55% lift; charging double the suggested price
-       costs about 40% of the gate. */
-    return 1.55 / (1 + 0.55 * Math.pow(p / suggested, 1.45));
+    /* Free entry is worth about a 60% lift; charging double the going rate
+       costs nearly 60% of the gate. The exponent is what makes the price a
+       decision: demand this elastic means the gate alone peaks just above the
+       going rate, so the choice is a genuine one between a full house and a
+       fat margin rather than a number with one right answer. */
+    return 1.6 / (1 + 0.6 * Math.pow(p / suggested, 2.2));
   }
 
   /* How many people would come through the door on a day like today.

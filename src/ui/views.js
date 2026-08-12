@@ -295,7 +295,11 @@
         (y ? '<div><span>Day ' + y.day + '</span><b>' + Math.round(y.visitors) + '</b> in · ' +
              fmt(y.gate + y.extra) + ' total</div>'
            : '<div><span>Yesterday</span>no trading yet</div>') +
+        '<div class="wide"><span>Grant</span><b>' + fmt(S7.state.grantRate(S)) + '/s</b> · set on ' +
+          Math.round(S7.state.attendance(S)) + ' a day</div>' +
       '</div>' +
+      '<p class="hint">The Institute funds you on last fortnight\'s attendance, so a ' +
+      'thin gate costs you twice. A dear ticket takes more per head and less of both.</p>' +
       (S.history.length > 1 ? historyStrip(S) : "");
   }
 

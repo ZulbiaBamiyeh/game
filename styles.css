@@ -215,6 +215,7 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .tillbook>div{background:var(--panel);padding:6px 8px;font-size:10.5px;color:var(--ink-2)}
 .tillbook span{display:block;font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
 .tillbook b{color:var(--bone);font-weight:400;font-size:13px}
+.tillbook>div.wide{grid-column:1 / -1}
 .tillhist{display:flex;align-items:flex-end;gap:2px;height:28px;margin-top:9px}
 .tillhist i{flex:1;background:var(--ochre-2);display:block;min-height:2px}
 .tillhist i:last-child{background:var(--ochre)}

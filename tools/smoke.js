@@ -237,6 +237,39 @@ function serve() {
     return out;
   });
 
+  /* The admission price has to be a decision, not a solved number. Sweep it
+     across the going rate and check that the best price is close to the
+     suggested one — if the optimum were at 3x, "what do I charge" would have a
+     single right answer and there would be nothing to decide. */
+  const pricing = await page.evaluate(() => {
+    const S = S7.state.fresh(99);
+    S.started = true;
+    S.bonus.capacity = 200;
+    for (let i = 0; i < 90; i++) {
+      const a = S7.artifacts.makeArtifact((Math.random() * 1e9) | 0, 5 + (i / 90) * 800);
+      a.no = String(i); a.display = true; S.collection.push(a);
+    }
+    const sv = S7.museum.survey(S);
+    const suggested = S7.museum.suggestedPrice(sv);
+    /* A settled fortnight at the going rate, so the grant is not still warming up. */
+    S.admission = suggested;
+    const settled = S7.museum.visitorsPerDay(S, sv);
+    S.history = [];
+    for (let d = 0; d < 14; d++) S.history.push({ day: d, visitors: settled, gate: 0, extra: 0 });
+
+    const rows = [];
+    for (const u of [0.5, 0.75, 1, 1.25, 1.5, 2, 3]) {
+      S.admission = Math.round(suggested * u * 2) / 2;
+      const v = S7.museum.visitorsPerDay(S, sv);
+      /* A day is 480 open minutes at one minute a second, plus the night. */
+      const take = v * S7.museum.perVisitor(S, sv) + S7.state.grantRate(S) * 540;
+      rows.push({ x: u, price: S.admission, perDay: Math.round(v), day: Math.round(take) });
+    }
+    const best = rows.reduce((m, r) => (r.day > m.day ? r : m), rows[0]);
+    const atRate = rows.find((r) => r.x === 1);
+    return { suggested, rows, bestAt: best.x, penalty: +(1 - atRate.day / best.day).toFixed(3) };
+  });
+
   /* Physical sizes should span from bead to monument, not cluster on one value. */
   const sizes = await page.evaluate(() => {
     const hs = [];
@@ -285,6 +318,10 @@ function serve() {
   console.log("art generators:", genErrors.length ? genErrors.slice(0, 20) : "all clean");
   console.log("museum scale (a real museum does tens to thousands a day):");
   for (const r of scale) console.log("  ", JSON.stringify(r));
+  console.log("pricing sweep (going rate " + pricing.suggested + "):");
+  for (const r of pricing.rows) console.log("  ", JSON.stringify(r));
+  console.log("  best at", pricing.bestAt + "x the going rate · charging the going rate costs",
+              Math.round(pricing.penalty * 100) + "%");
   console.log("artifact sizes:", JSON.stringify(sizes));
   console.log("rehang:", rehang);
   console.log("console errors:", errors.length ? errors.slice(0, 20) : "none");
@@ -301,7 +338,9 @@ function serve() {
                  scale[0].perDay > 60 ||           /* one object is not a day out */
                  scale[scale.length - 1].perDay > 12000 ||  /* nor is it the Louvre */
                  busiest > 12000 ||                /* and neither is hour two */
-                 dearest > 40;                     /* nobody pays £40 to see a shaft */
+                 dearest > 40 ||                    /* nobody pays £40 to see a shaft */
+                 pricing.bestAt > 1.5 || pricing.bestAt < 0.75 ||
+                 pricing.penalty > 0.05;   /* the going rate must be honest advice */
   if (failed) { console.error("\nSMOKE FAILED"); process.exit(1); }
   console.log("\nSMOKE OK");
 })();

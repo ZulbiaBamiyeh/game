@@ -134,12 +134,13 @@ renown    = sig^0.62 × breadth × variety × softCap(ratingMul, 25) × crowd
 rating    = 100 × renown / (renown + 6000)         // the 0–100 sign over the door
 
 suggested = max(2, round₂(2.5 + rating × 0.16))    // what you could fairly charge
-priceFac  = 1.55 / (1 + 0.55 × (price / suggested)^1.45)
+priceFac  = 1.6 / (1 + 0.6 × (price / suggested)^2.2)
 
 perDay    = 4200 × (rating/100)^1.25 × softCap(visitorMul, 2.6) × priceFac
 perMinute = perDay / 480 × shape(timeOfDay)
 spend     = (0.8 + 2.2 × rating/100) × softCap(spendMul, 2.4) × softCap(dwellMul, 1.5)
 take      = admission + spend                      // per person, at the door
+grant     = (0.30 + depth×0.005 + 30a/(a+2500)) × grantMul   // a = 14-day mean attendance
 ```
 
 **Footfall hangs off the rating, not off renown, and that is the whole trick.** The
@@ -164,13 +165,41 @@ makes display cases worth buying.
 The admission price is the only decision in the game that cuts both ways, and it is the
 player's. `suggested` is what a museum of this standing could fairly charge — £2.50 at
 the start, rising to about £18 for a world collection. Charge under it and footfall
-lifts; free entry is worth about a 55% lift. Charge over it and the gate thins; double
-the suggested price costs about 40% of it.
+lifts; free entry is worth about a 60% lift. Charge over it and the gate thins; double
+the going rate costs nearly 60% of it.
+
+**The exponent on that curve is what makes the price a decision rather than a number
+with one right answer.** At a gentler elasticity the optimum sat at twice the going
+rate for every collection at every size, which is not a choice, it is a chore. At 2.2
+the sweep looks like this — a settled 90-piece collection, everything included:
+
+| Price | Visitors/day | A day's income |
+|---|---|---|
+| ×0.5 | 993 | £8,570 |
+| ×0.75 | 857 | £9,198 |
+| **×1** | **716** | **£9,379** |
+| ×1.25 | 588 | £9,261 |
+| ×1.5 | 450 | £8,866 |
+| ×2 | 305 | £8,141 |
+| ×3 | 148 | £6,858 |
+
+Flat within 2% across the middle three rows and falling away hard outside them. So the
+going rate is honest advice, shading either way is nearly free, and going a long way
+either way is not. What you are really choosing is whether you want a full gallery or a
+quiet one. `npm run smoke` runs this sweep and **fails the build** if the optimum drifts
+outside 0.75–1.5× the going rate, or if taking the game's own advice ever costs more
+than 5%.
+
+**Public funding is the other half of it.** The Institute's grant is set on the last
+fortnight's average attendance — `30a/(a + 2500)` per second, saturating — because that
+is how museums are actually funded. It is a floor under a quiet museum, a real chunk of
+a busy one's income, and the reason a thin gate costs you twice.
 
 Because secondary spend is per head and does not care what the ticket cost, a museum
 with a good café and shop genuinely can do better on a cheap ticket and a full house.
 The till panel shows the going rate, what your price is doing to footfall as a
-percentage, today's book, yesterday's, and a fortnight of bars.
+percentage, the grant and the attendance it is set on, today's book, yesterday's, and a
+fortnight of bars.
 
 ### What it is worth in real money
 
@@ -334,6 +363,8 @@ was the second claim that used to be false.
 | More/fewer finds | `find` per era in `cultures.js`, and the `findGap` floor `2.2 + depth×0.015` |
 | Slower rating climb | the `+ 6000` in `rating` and the `softCap` ceilings in `museum.js` |
 | Busier or quieter museum | `PEAK_DAY` and `OUTREACH_CAP` in `museum.js` |
+| How much the ticket price matters | the exponent in `priceFactor`, `museum.js` |
+| How much public money matters | `publicFunding` in `state.js` |
 | Longer or shorter trading day | `OPEN_AT` / `CLOSE_AT` / `NIGHT_SPEED` in `museum.js` |
 | Punchier early game | `base` and `mul` on the first four upgrades in `upgrades.js` |
 
