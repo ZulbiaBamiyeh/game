@@ -133,12 +133,6 @@
       unlock: (S) => S.stats.accessioned >= 10,
       eff: (S) => { S.bonus.capacity += 10; S.mul.visitors *= 1.08; S.mul.rating *= 1.04; } },
 
-    { id: "climate", name: "Climate control", base: 320, mul: 1.35, max: 6,
-      desc: () => "Wall units in every gallery. +6% rating.",
-      flavour: "Nineteen degrees, fifty per cent, forever.",
-      unlock: (S) => S.stats.accessioned >= 12,
-      eff: (S) => { S.mul.rating *= 1.06; S.flags.climate = true; } },
-
     { id: "research", name: "Research library", base: 2200, mul: 1.40, max: 4,
       desc: () => "A quiet room upstairs. +15% Understanding, +6% rating.",
       flavour: "Somebody whose whole job is the deep material.",

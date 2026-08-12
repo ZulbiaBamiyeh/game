@@ -79,13 +79,12 @@
       staff: u.staff || u.guides || 0,
       guides: u.staff || u.guides || 0,
       cafe: u.cafe || 0,
-      climate: u.climate || 0,
       upper: u.upper || (u.wing ? 1 : 0),
       wing: u.upper || u.wing || 0,
       research: u.research || 0,
       deepgal: u.deepgal || 0,
-      climateOn: !!(S.flags && S.flags.climate),
       /* retired upgrades — keep zero so old draw branches stay quiet */
+      climate: 0, climateOn: false,
       tickets: 0, leaflet: 0, plinths: 0, press: 0, touring: 0,
     };
   }
@@ -427,15 +426,6 @@
     if (roomHasBoard(r)) drawInfoBoard(r);
     if (r.width > 260) drawPlant(x1 - 22);
 
-    if (fac && (fac.climate > 0 || fac.climateOn)) {
-      drawClimateUnit(x0 + 52);
-      if (fac.climate >= 3 || fac.climateOn) {
-        ctx.globalAlpha = 0.04;
-        rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#8ec4d8");
-        ctx.globalAlpha = 1;
-      }
-    }
-
     if (fac && fac.staff > 0 && r.exhibits.length) drawGuide(r);
     roomLocal = false;
   }
@@ -494,14 +484,6 @@
       ctx.lineWidth = 2;
       ctx.strokeRect(sx(b.x) - 3, sy(b.y) - 3, Math.round(b.w * SCALE) + 6, Math.round(b.h * SCALE) + 6);
     }
-  }
-
-  function drawClimateUnit(px) {
-    rect(px, 52, 14, 10, "#3a4248");
-    rect(px, 52, 14, 1, "#6a7a84");
-    rect(px + 2, 55, 10, 2, "#1a2228");
-    rect(px + 2, 58, 4, 2, fac && fac.climateOn ? "#4e9d4e" : "#6a7a84");
-    rect(px + 8, 58, 4, 2, "#4e9d4e");
   }
 
   function drawGuide(r) {
@@ -567,7 +549,6 @@
     /* Cashier behind the till */
     if (fac && (fac.staff > 0 || true)) drawStaffAt(kx + 4, FLOOR_Y + 16, "shop");
     drawPlant(x1 - 22);
-    if (fac && fac.climate > 0) drawClimateUnit(x0 + 16);
   }
 
   function drawCafe(r) {
@@ -622,7 +603,6 @@
     /* Barista */
     drawStaffAt(kx, FLOOR_Y + 16, "cafe");
     drawPlant(x1 - 22);
-    if (fac && fac.climate > 0) drawClimateUnit(x0 + 48);
   }
 
   function drawResearchRoom(r) {
@@ -683,7 +663,7 @@
     }
     rect(x0 + r.width / 2 - 40, 44, 80, 14, "#12161c");
     rect(x0 + r.width / 2 - 40, 44, 80, 1, "#4a6a8a");
-    if (fac && fac.climate > 0) drawClimateUnit(x0 + 16);
+
   }
 
   function drawWingRoom(r) {
@@ -694,7 +674,7 @@
     for (let i = 0; i < 5; i++) rect(x0 + 24, 54 + i * 4, 22 + (i % 2) * 6, 1, "#5d5138");
     drawPlant(x1 - 22);
     if (r.wingIndex === 0) drawPlant(x0 + 50);
-    if (fac && fac.climate > 0) drawClimateUnit(x0 + 14);
+
   }
 
   /* ---------- the entrance hall ---------------------------------------------
@@ -769,7 +749,7 @@
     rect(kx + 40, 132, 1, 8, C.rope);
     rect(kx - 40, 133, 80, 1, C.rope);
     drawPlant(r.width - 26);
-    if (fac && fac.climate > 0) drawClimateUnit(r.deskX + 50);
+
   }
 
   function drawDoorway(x0) {
