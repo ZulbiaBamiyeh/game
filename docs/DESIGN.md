@@ -135,6 +135,48 @@ makes display cases worth buying.
 | < 70 | One of the great collections. Scholars book months ahead. |
 | ≥ 85 | There is nothing else like it, because there is nowhere else like Site 7. |
 
+### The floor
+
+The museum tab opens on a side-on cutaway of the building: one long horizontal
+strip, one room per depth band in depth order, joined by doorways. Drag it, wheel
+it, arrow-key it, or use the room dots. Clicking any exhibit opens its record.
+
+Exhibits are mounted by class — paintings hang on the wall under a spotlight,
+sculpture goes on a plinth behind a rope, objects sit in low glass cases — and
+everything that stands on the floor, visitors included, is depth-sorted together,
+so a visitor can walk behind one plinth and in front of the next.
+
+**The crowd.** Visitors are pixel people generated from a seed like everything
+else, baked once into stand / four-frame walk / back-view. Seven archetypes —
+adult, child, tourist, scholar, school group, elder, staff — each with its own
+gait, dwell time, accessories and vocabulary. They walk in, pick an exhibit,
+stand and look at it, sometimes photograph it, sometimes talk about it, then move
+on or leave.
+
+Population is `2 + √(visitors per minute)`, capped at 42. Late on the museum is
+legitimately doing thousands a minute and forty-two people is as many as a room
+can read, so the header says "38 in view of 4.2k/min" rather than lying.
+
+**What they say** is picked from weighted buckets, most specific first: the
+object's class, its specific type, its tradition, its condition, its rarity, and
+its `eerie` tier — then who is speaking, then ambient chatter that has nothing to
+do with the art and is mostly about the café. Two visitors looking at the same
+thing can fall into a scripted exchange. The result is that a Benin head gets
+"lost-wax casting, and they were doing it better than Europe was", a Jōmon figure
+gets "every single one that's ever been found was broken before it was buried, on
+purpose", and the unattributed rooms get "can we go to the next room. Please."
+
+Rendering runs at two resolutions on one canvas, deliberately: the world is drawn
+at an integer 2× so artifacts land 1:1 and people 3:1 with no fractional
+sampling, then labels and speech bubbles are drawn afterwards at the canvas's own
+resolution. Six-pixel text scaled up is unreadable; crisp text over pixel art
+looks intentional. At most four visitors talk at once, and bubbles claim space
+for the frame so a pair in conversation stacks upward instead of blanking the
+exhibit they are discussing.
+
+The crowd only simulates while the museum tab is open. Nobody is walking around
+behind the Research tab.
+
 ---
 
 ## 4. Progression and pacing
@@ -322,8 +364,12 @@ src/
   sim/museum.js       rating, visitors, income, collection sets
   sim/game.js         descent, excavation, keystones, offline catch-up, prestige
   sim/save.js         localStorage + export/import
+  art/people.js       visitor sprites, seven archetypes
+  content/remarks.js  what visitors say, keyed to the art in front of them
+  sim/visitors.js     room layout and the crowd state machine
   ui/shaft.js         the shaft cross-section renderer
   ui/digview.js       the excavation renderer
+  ui/gallery.js       the museum floor: rooms, exhibits, crowd, bubbles
   ui/views.js         every DOM panel
   main.js             boot, frame, modals, wiring
 tools/
@@ -355,7 +401,8 @@ with a different name.
 Ranked by value per unit of work.
 
 1. **Audio.** Nothing at all yet. A drill loop that changes pitch with depth, a soft
-   brush, and one very quiet tone below 500 m would do most of the work.
+   brush, a room tone that gets quieter as you go deeper into the museum, and one
+   camera shutter would do most of the work.
 2. **Multiple concurrent sites.** Prestige currently replaces the site. Running two at
    once, each with its own drill and its own band of the deposit, is the obvious next
    layer — and the fiction already has Site 3 reported.
@@ -363,11 +410,14 @@ Ranked by value per unit of work.
    Gives the store a purpose beyond overflow.
 4. **Loans and exhibitions.** Send a piece away for a period: lose its display
    contribution, gain a large lump and a rating bump on return.
-5. **A curator's eye.** Let the player arrange galleries by theme rather than by band,
-   and pay for coherent groupings. Turns the museum tab from a list into a decision.
-6. **Deeper keystone chain.** The floor at 830 m ends the story cleanly; the anachronic
+5. **A curator's eye.** Let the player drag exhibits between positions and rooms, and
+   pay for coherent groupings. The floor view already makes the arrangement visible;
+   making it editable turns it into a decision.
+6. **Benches, and visitors who use them.** The elders already carry sticks and walk
+   slowly; giving them somewhere to sit is two hours of work and a lot of character.
+7. **Deeper keystone chain.** The floor at 830 m ends the story cleanly; the anachronic
    band could carry two or three more written finds before it.
-7. **Mobile polish.** It reflows and the excavation works with touch, but the stat bar
+8. **Mobile polish.** It reflows and the excavation works with touch, but the stat bar
    wants a compact mode and the modals want to be sheets.
 
 ---

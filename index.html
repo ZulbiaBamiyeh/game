@@ -85,6 +85,19 @@
 
     <!-- ================= MUSEUM ================= -->
     <section id="v-museum" class="view" hidden>
+      <div class="panel fullwidth gallerypanel">
+        <div class="lbl">On the floor <span class="lblnote" id="gal-crowd"></span></div>
+        <div class="galwrap">
+          <canvas id="c-gallery"></canvas>
+          <button class="galnav l" id="gal-prev" type="button" aria-label="Previous room">‹</button>
+          <button class="galnav r" id="gal-next" type="button" aria-label="Next room">›</button>
+        </div>
+        <div class="galbar">
+          <div class="galroom"><b id="gal-room">—</b><span id="gal-period"></span></div>
+          <div class="galdots" id="gal-dots"></div>
+        </div>
+      </div>
+
       <div class="col-stage">
         <div class="panel ratingcard">
           <div class="ratinghead">
@@ -101,7 +114,7 @@
         </div>
 
         <div class="panel">
-          <div class="lbl">Galleries <span class="lblnote" id="gal-note"></span></div>
+          <div class="lbl">Catalogue <span class="lblnote" id="gal-note"></span></div>
           <div id="galleries"></div>
         </div>
 
@@ -224,17 +237,21 @@
 <script src="src/art/paintings.js"></script>
 <script src="src/art/sculptures.js"></script>
 <script src="src/art/objects.js"></script>
+<script src="src/art/people.js"></script>
 <script src="src/content/cultures.js"></script>
 <script src="src/content/boons.js"></script>
 <script src="src/content/upgrades.js"></script>
 <script src="src/content/artifacts.js"></script>
 <script src="src/content/lore.js"></script>
+<script src="src/content/remarks.js"></script>
 <script src="src/sim/state.js"></script>
 <script src="src/sim/museum.js"></script>
 <script src="src/sim/game.js"></script>
+<script src="src/sim/visitors.js"></script>
 <script src="src/sim/save.js"></script>
 <script src="src/ui/shaft.js"></script>
 <script src="src/ui/digview.js"></script>
+<script src="src/ui/gallery.js"></script>
 <script src="src/ui/views.js"></script>
 <script src="src/main.js"></script>
 </body>

@@ -194,6 +194,29 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .log p.good{color:var(--good)}
 .log .d{color:var(--ochre-2);font-size:9px;letter-spacing:.1em;margin-right:6px}
 
+/* ---------- the gallery floor --------------------------------------------- */
+
+.view>.fullwidth{grid-column:1 / -1}
+.gallerypanel{padding-bottom:9px}
+.galwrap{position:relative;line-height:0;background:#0a0806;border:1px solid var(--line)}
+#c-gallery{width:100%;height:auto;display:block;image-rendering:pixelated;touch-action:pan-y;cursor:grab}
+.galnav{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:30px;height:52px;border:1px solid var(--line);
+  background:rgba(18,16,10,.82);color:var(--ochre);font:20px/1 var(--mono);
+  cursor:pointer;padding:0;transition:background .12s,border-color .12s;
+}
+.galnav:hover{background:rgba(42,35,22,.95);border-color:var(--ochre-2)}
+.galnav.l{left:6px}
+.galnav.r{right:6px}
+.galbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:8px}
+.galroom{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.galroom b{color:var(--bone);font-weight:400;margin-right:8px}
+.galdots{display:flex;gap:4px;flex:none}
+.galdots i{width:6px;height:6px;background:#2d2617;border:1px solid var(--line);cursor:pointer;display:block}
+.galdots i.on{background:var(--ochre);border-color:var(--ochre)}
+
 /* ---------- museum -------------------------------------------------------- */
 
 .ratingcard{background:linear-gradient(180deg,#211a10,#1a160d)}

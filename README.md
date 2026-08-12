@@ -38,6 +38,10 @@ tradition.
   is a few kilobytes.
 - **34 cultures across 11 depth bands**, from modern refuse at the top to material with
   no accepted context at the bottom. Depth is chronology.
+- **A museum you can walk through** — a side-on cutaway of the building, one room per
+  depth band, with a crowd of procedurally generated visitors who stop at exhibits,
+  photograph them, and talk about them. What they say is keyed to the actual object in
+  front of them: its class, its culture, its condition and how far down it came from.
 - **A museum economy** — significance to renown to visitors to spend to funding — with
   the whole thing bounded so the numbers stay on screen.
 - **24 random permanent upgrades**, one rolled per artifact, plus two shops, a research

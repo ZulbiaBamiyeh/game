@@ -9,6 +9,7 @@
   const $ = V.$;
 
   let S = null;
+  let crowd = null;                 /* the people walking around the museum */
   let last = performance.now();
   let saveTimer = 0, uiTimer = 0, idleLine = 0, idleTimer = 0;
   let viewedArtifact = null;
@@ -244,6 +245,34 @@
     show("m-menu", true);
   }
 
+  /* ---------- the gallery floor --------------------------------------------------- */
+
+  function renderRoomBar() {
+    const rooms = S7.galleryView.rooms();
+    const here = S7.galleryView.currentRoom();
+    $("gal-room").textContent = here ? here.era.name : "—";
+    $("gal-period").textContent = here && here.era.period ? here.era.period : "";
+    const dots = $("gal-dots");
+    if (dots.children.length !== rooms.length) {
+      dots.innerHTML = "";
+      rooms.forEach((r, i) => {
+        const d = document.createElement("i");
+        d.title = r.era.name;
+        d.addEventListener("click", () => S7.galleryView.goToRoom(i));
+        dots.appendChild(d);
+      });
+    }
+    rooms.forEach((r, i) => dots.children[i].classList.toggle("on", r === here));
+
+    const sv = M.survey(S);
+    const vpm = M.visitorsPerMin(S, sv);
+    $("gal-crowd").textContent = sv.count === 0
+      ? "closed to the public"
+      : crowd.overflow > 0
+        ? V.fmt(crowd.crowd) + " in view of " + V.fmt(vpm) + "/min · drag to walk the floor"
+        : V.fmt(crowd.crowd) + " in the building · drag to walk the floor";
+  }
+
   /* ---------- refresh ------------------------------------------------------------ */
 
   function refreshAll() {
@@ -303,6 +332,12 @@
     if (S.tab === "site") {
       if (S.active) S7.digView.draw(S, dt);
       else S7.shaftView.draw(S);
+    } else if (S.tab === "museum") {
+      /* The crowd only exists while you are looking at it. Nobody is
+         simulating footsteps behind the Research tab. */
+      S7.visitors.step(crowd, S, dt, S7.visitors.getLayout(S));
+      S7.galleryView.draw(S, crowd, dt);
+      renderRoomBar();
     }
 
     refreshLive();
@@ -337,6 +372,8 @@
 
     S7.shaftView.init($("c-shaft"));
     S7.digView.init($("c-dig"), onBrush);
+    S7.galleryView.init($("c-gallery"), openArtifact);
+    crowd = S7.visitors.create(S.seed ^ 0x5bf03635);
 
     $("app").hidden = false;
     $("dig-hint").textContent = HINT;
@@ -360,11 +397,20 @@
       refreshAll();
     });
     $("o-ok").addEventListener("click", () => show("m-offline", false));
+    $("gal-prev").addEventListener("click", () => S7.galleryView.nudge(-1));
+    $("gal-next").addEventListener("click", () => S7.galleryView.nudge(1));
     $("btn-menu").addEventListener("click", openMenu);
     $("mn-close").addEventListener("click", () => show("m-menu", false));
     $("introbox").addEventListener("click", () => {
       if (S.intro >= S7.lore.INTRO.length) { show("m-intro", false); return; }
       advanceIntro();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (S.tab !== "museum") return;
+      if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (e.key === "ArrowLeft") { S7.galleryView.nudge(-1); e.preventDefault(); }
+      if (e.key === "ArrowRight") { S7.galleryView.nudge(1); e.preventDefault(); }
     });
 
     window.addEventListener("beforeunload", () => S7.save.save(S));
