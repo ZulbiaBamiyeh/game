@@ -23,49 +23,89 @@
   const FLOOR_Y = 112;           /* where the back wall meets the floor */
   const WALK_FAR = 118;          /* back of the walkable band, nearest the wall */
   const WALK_NEAR = 152;         /* front of it */
-  const ROOM_PAD = 54;
-  const SLOT = 62;               /* horizontal spacing between exhibits */
+  const ROOM_PAD = 30;
+  const MIN_ROOM = 220;
   const DOOR = 58;               /* the arch between two rooms */
+  const BENCH_Y = 146;           /* where a bench stands on the floor */
   const MAX_AGENTS = 42;
 
   /* ---------- layout -------------------------------------------------------- */
 
-  /* Rooms are era bands, in depth order, and only bands with something on
-     display get one. An empty museum is one small room with nothing in it. */
+  /* Rooms are era bands by default, but an artifact can be hung anywhere the
+     curator wants it: `a.room` overrides its era and `a.slot` its position.
+     Slot widths come from the object's real size, so a colossal head gets a
+     bay of wall to itself and a bead does not. */
   function layout(S) {
     const shown = S.collection.filter((a) => a.display !== false);
     const byEra = new Map();
     for (const a of shown) {
-      const e = S7.cultures.eraAt(a.depth);
-      if (!byEra.has(e.id)) byEra.set(e.id, { era: e, items: [] });
-      byEra.get(e.id).items.push(a);
+      const id = a.room || S7.cultures.eraAt(a.depth).id;
+      if (!byEra.has(id)) byEra.set(id, []);
+      byEra.get(id).push(a);
     }
+
+    const eraById = {};
+    for (const e of S7.cultures.ERAS) eraById[e.id] = e;
 
     const rooms = [];
     let x = 0;
     for (const era of S7.cultures.ERAS) {
-      const g = byEra.get(era.id);
-      if (!g) continue;
-      g.items.sort((a, b) => a.depth - b.depth);
-      const n = g.items.length;
-      const width = ROOM_PAD * 2 + Math.max(1, n) * SLOT;
-      const exhibits = g.items.map((a, i) => {
-        const ex = x + ROOM_PAD + SLOT * (i + 0.5);
+      const items = byEra.get(era.id);
+      if (!items) continue;
+      items.sort((a, b) => (a.slot === undefined ? a.depth : a.slot) -
+                           (b.slot === undefined ? b.depth : b.slot));
+
+      const exhibits = [];
+      let cx = x + ROOM_PAD;
+      for (let i = 0; i < items.length; i++) {
+        const a = items[i];
+        const phys = S7.artifacts.physical(a);
         const mount = a.kind === "painting" ? "wall" : a.kind === "sculpture" ? "plinth" : "case";
-        return { a, x: ex, mount, index: i };
-      });
-      rooms.push({ era: era, x, width, exhibits, items: g.items });
+        exhibits.push({ a, x: cx + phys.w / 2, w: phys.w, h: phys.h, mount, index: i, phys });
+        cx += phys.w;
+      }
+      const width = Math.max(MIN_ROOM, cx - x + ROOM_PAD);
+
+      /* One bench per stretch of room, dropped in the widest gap between
+         exhibits so nobody has to sit inside a display case. */
+      const benches = [];
+      const nBench = Math.max(1, Math.floor(width / 300));
+      for (let b = 0; b < nBench; b++) {
+        const bx = x + width * ((b + 0.5) / nBench) + (b % 2 ? 18 : -18);
+        benches.push({
+          x: bx, y: BENCH_Y,
+          seats: [bx - 13, bx, bx + 13].map((sxx) => ({ x: sxx, taken: null })),
+        });
+      }
+
+      rooms.push({ era, x, width, exhibits, items, benches });
       x += width + DOOR;
     }
 
     if (!rooms.length)
       rooms.push({ era: { id: "empty", name: "The room in town", period: "not yet open" },
-                   x: 0, width: 320, exhibits: [], items: [] });
+                   x: 0, width: 320, exhibits: [], items: [], benches: [] });
 
     const total = rooms[rooms.length - 1].x + rooms[rooms.length - 1].width;
-    const exhibits = [];
-    for (const r of rooms) for (const e of r.exhibits) { e.room = r; exhibits.push(e); }
-    return { rooms, exhibits, total, H, FLOOR_Y };
+    const exhibits = [], benches = [];
+    for (const r of rooms) {
+      for (const e of r.exhibits) { e.room = r; exhibits.push(e); }
+      for (const b of r.benches) { b.room = r; benches.push(b); }
+    }
+    return { rooms, exhibits, benches, total, H, FLOOR_Y };
+  }
+
+  /* Reassigns an artifact to a room and a position, for drag-to-rearrange.
+     Slots are renumbered from 0 so the ordering stays stable across saves. */
+  function place(S, artifact, roomId, beforeIndex) {
+    artifact.room = roomId;
+    const peers = S.collection.filter(
+      (a) => a !== artifact && a.display !== false && (a.room || S7.cultures.eraAt(a.depth).id) === roomId);
+    peers.sort((a, b) => (a.slot === undefined ? a.depth : a.slot) -
+                         (b.slot === undefined ? b.depth : b.slot));
+    peers.splice(Math.max(0, Math.min(peers.length, beforeIndex)), 0, artifact);
+    peers.forEach((a, i) => { a.slot = i; a.room = roomId; });
+    invalidate();
   }
 
   /* The layout is rebuilt only when the collection or what is on show changes.
@@ -123,10 +163,26 @@
       phase: rng.range(0, 4),
       chatCooldown: rng.range(2, 12),
       groupOffset: rng.range(-16, 16),
+      seat: null,
+      /* Elders sit given half a chance; everyone else needs to have been
+         walking round for a while first. */
+      restWish: def.stick ? rng.range(0.45, 0.75) : rng.range(0.05, 0.18),
     };
   }
 
-  const feetY = (a) => WALK_FAR + a.z * (WALK_NEAR - WALK_FAR);
+  /* Somewhere to sit, if there is one within a sensible walk. */
+  function freeSeat(L, a) {
+    let best = null, bestD = 300;
+    for (const b of L.benches)
+      for (const seat of b.seats) {
+        if (seat.taken !== null) continue;
+        const d = Math.abs(seat.x - a.x);
+        if (d < bestD) { bestD = d; best = seat; }
+      }
+    return best;
+  }
+
+  const feetY = (a) => (a.state === "sit" ? BENCH_Y : WALK_FAR + a.z * (WALK_NEAR - WALK_FAR));
   const scaleOf = (a) => (0.82 + a.z * 0.30) * a.def.scale;
 
   /* Pick something to walk to. Prefers exhibits near where they already are,
@@ -196,7 +252,10 @@
         ? rng.pick(L.exhibits).x + rng.range(-130, 130) : undefined;
       state.agents.push(spawn(rng, L, near));
     }
-    while (state.agents.length > want + 6) state.agents.pop();
+    while (state.agents.length > want + 6) {
+      const gone = state.agents.pop();
+      if (gone && gone.seat) gone.seat.taken = null;
+    }
 
     for (let i = state.agents.length - 1; i >= 0; i--) {
       const a = state.agents[i];
@@ -238,7 +297,30 @@
         if (a.timer <= 0) {
           a.visits--;
           a.target = null;
-          a.state = a.visits <= 0 ? "leave" : "walk";
+          if (a.visits <= 0) a.state = "leave";
+          else if (rng.chance(a.restWish)) {
+            const seat = freeSeat(L, a);
+            if (seat) { seat.taken = a.id; a.seat = seat; a.state = "toSeat"; }
+            else a.state = "walk";
+          } else a.state = "walk";
+        }
+      } else if (a.state === "toSeat") {
+        const d = a.seat.x - a.x;
+        a.dir = d < 0 ? -1 : 1;
+        a.x += Math.sign(d) * Math.min(Math.abs(d), a.speed * dt);
+        a.phase += a.speed * dt * 0.55;
+        a.z += (0.92 - a.z) * dt * 1.2;          /* benches sit forward of the art */
+        if (Math.abs(d) < 1.2) {
+          a.state = "sit";
+          a.timer = rng.range(9, 26) * (a.def.stick ? 1.5 : 1);
+        }
+      } else if (a.state === "sit") {
+        a.timer -= dt;
+        if (!a.bubble && rng.chance(dt * 0.10)) say(state, a, S7.remarks.ambient(rng, a.type), rng.range(3.2, 5));
+        if (a.timer <= 0) {
+          if (a.seat) { a.seat.taken = null; a.seat = null; }
+          a.state = "walk";
+          a.restWish *= 0.35;                    /* they have had their sit down */
         }
       } else {                                   /* leave */
         const exitLeft = a.x < L.total / 2;
@@ -246,7 +328,10 @@
         a.x += a.dir * a.speed * 1.25 * dt;
         a.phase += a.speed * dt * 0.6;
         a.z += (0.85 - a.z) * dt * 0.8;
-        if (a.x < -24 || a.x > L.total + 24) state.agents.splice(i, 1);
+        if (a.x < -24 || a.x > L.total + 24) {
+          if (a.seat) a.seat.taken = null;
+          state.agents.splice(i, 1);
+        }
       }
     }
 
@@ -290,7 +375,7 @@
   }
 
   S7.visitors = {
-    create, step, layout, getLayout, invalidate, reseat, roomAt, feetY, scaleOf,
-    H, FLOOR_Y, WALK_NEAR, WALK_FAR, ROOM_PAD, SLOT, DOOR, MAX_AGENTS,
+    create, step, layout, getLayout, invalidate, reseat, place, roomAt, feetY, scaleOf,
+    H, FLOOR_Y, WALK_NEAR, WALK_FAR, ROOM_PAD, DOOR, BENCH_Y, MAX_AGENTS,
   };
 })(window.S7 = window.S7 || {});

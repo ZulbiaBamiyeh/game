@@ -28,8 +28,11 @@
   let cam = 0, camTarget = 0;
   let dragging = false, dragMoved = 0, dragX = 0, dragCam = 0;
   let layoutCache = null;
-  let onExhibit = null;
-  let hover = null;
+  let onOpen = null, onSelect = null;
+  let hover = null, selected = null;
+  let arrange = false;
+  let dragEx = null;                /* an exhibit being carried to a new spot */
+  let pointer = { x: 0, y: 0 };
 
   /* ---------- palette ------------------------------------------------------- */
 
@@ -40,7 +43,8 @@
     floorHi: "#3a3021", floorLo: "#2b2418", floorLine: "#241e14",
     skirt: "#4a3f29",
     plinth: "#5a4e35", plinthTop: "#6d5f42", plinthShade: "#3d3423",
-    caseGlass: "#8fb0bd", caseFrame: "#4a4234",
+    caseGlass: "#9dc0cd", caseFrame: "#2e2a22", caseEdge: "#4f4736",
+    ped: "#4f452e", pedTop: "#63563a", pedShade: "#372f1f",
     door: "#120e08", arch: "#4c412a",
     light: "#ffd9884d",
     label: "#d8cfb6", labelBg: "#1a160d",
@@ -50,56 +54,111 @@
 
   /* ---------- setup ---------------------------------------------------------- */
 
-  function init(el, exhibitClick) {
+  function init(el, handlers) {
     canvas = el;
     canvas.width = CW;
     canvas.height = CH;
     ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
-    onExhibit = exhibitClick;
+    onOpen = handlers.onOpen;
+    onSelect = handlers.onSelect;
 
-    const localX = (e) => {
+    const local = (e) => {
       const r = canvas.getBoundingClientRect();
-      return (e.clientX - r.left) * (CW / r.width);
-    };
-    const localY = (e) => {
-      const r = canvas.getBoundingClientRect();
-      return (e.clientY - r.top) * (CH / r.height);
+      return { x: (e.clientX - r.left) * (CW / r.width), y: (e.clientY - r.top) * (CH / r.height) };
     };
 
     canvas.addEventListener("pointerdown", (e) => {
+      const p = local(e);
+      pointer = p;
+      const hit = pick(p.x, p.y);
+      if (arrange && hit) {
+        dragEx = { e: hit, from: hit.room };
+        dragMoved = 0;
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       dragging = true; dragMoved = 0;
-      dragX = localX(e); dragCam = cam;
+      dragX = p.x; dragCam = cam;
       canvas.setPointerCapture(e.pointerId);
     });
+
     canvas.addEventListener("pointermove", (e) => {
-      const lx = localX(e);
+      const p = local(e);
+      pointer = p;
+      if (dragEx) {
+        dragMoved += 1;
+        /* Carrying something past the edge pans the building along with it. */
+        if (p.x < 60) camTarget = cam = clampCam(cam - 3);
+        else if (p.x > CW - 60) camTarget = cam = clampCam(cam + 3);
+        return;
+      }
       if (dragging) {
-        const dx = (lx - dragX) / SCALE;
+        const dx = (p.x - dragX) / SCALE;
         dragMoved = Math.max(dragMoved, Math.abs(dx));
         cam = camTarget = clampCam(dragCam - dx);
-      } else if (layoutCache) {
-        hover = pick(lx, localY(e));
-        canvas.style.cursor = hover ? "pointer" : "grab";
+        return;
+      }
+      if (layoutCache) {
+        hover = pick(p.x, p.y);
+        canvas.style.cursor = hover ? (arrange ? "grab" : "pointer") : (arrange ? "default" : "grab");
       }
     });
+
     const release = (e) => {
+      const p = local(e);
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* gone */ }
+
+      if (dragEx) {
+        const drop = dropTarget(p.x);
+        if (drop && handlers.onMove) handlers.onMove(dragEx.e.a, drop.roomId, drop.index);
+        dragEx = null;
+        return;
+      }
       if (!dragging) return;
       dragging = false;
-      try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* gone */ }
       if (dragMoved < 4) {
-        const hit = pick(localX(e), localY(e));
-        if (hit && onExhibit) onExhibit(hit.a);
+        const hit = pick(p.x, p.y);
+        selected = hit || null;
+        if (onSelect) onSelect(hit ? hit.a : null);
       }
     };
     canvas.addEventListener("pointerup", release);
-    canvas.addEventListener("pointercancel", () => { dragging = false; });
+    canvas.addEventListener("pointercancel", () => { dragging = false; dragEx = null; });
+    canvas.addEventListener("dblclick", (e) => {
+      const p = local(e);
+      const hit = pick(p.x, p.y);
+      if (hit && onOpen) onOpen(hit.a);
+    });
     canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
       camTarget = clampCam(camTarget + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.6);
     }, { passive: false });
     canvas.style.cursor = "grab";
   }
+
+  /* Where a carried exhibit would land: which room, and how many of its
+     exhibits sit to the left of the pointer. */
+  function dropTarget(px) {
+    if (!layoutCache) return null;
+    const wx = px / SCALE + cam;
+    const room = V.roomAt(layoutCache, wx);
+    if (!room || !room.era) return null;
+    let index = 0;
+    for (const e of room.exhibits) if (e !== dragEx.e && e.x < wx) index++;
+    return { roomId: room.era.id, index };
+  }
+
+  const setArrange = (on) => {
+    arrange = !!on;
+    if (!arrange) dragEx = null;
+    canvas.style.cursor = arrange ? "default" : "grab";
+  };
+  const isArranging = () => arrange;
+  const isDragging = () => !!dragEx;
+  /* Test hook: what the hit-test sees at a canvas-space point. */
+  const probe = (px, py) => { const e = pick(px, py); return { cam, arrange, hit: e ? e.a.no : null }; };
+  const clearSelection = () => { selected = null; };
 
   const clampCam = (x) =>
     Math.max(0, Math.min(Math.max(0, (layoutCache ? layoutCache.total : VIEW) - VIEW), x));
@@ -115,12 +174,24 @@
     return null;
   }
 
-  /* Where an exhibit's artwork sits, in world pixels. 32 logical = 64 canvas
-     pixels = the sprite at 1:1. */
+  /* Where an exhibit's artwork sits, in world pixels — driven by the object's
+     own physical size, so a bead occupies a small case at eye level and a
+     colossal head runs from the floor almost to the ceiling. */
   function exhibitBox(e) {
-    if (e.mount === "wall") return { x: e.x - 16, y: 44, w: 32, h: 32 };
-    if (e.mount === "plinth") return { x: e.x - 16, y: 64, w: 32, h: 32 };
-    return { x: e.x - 16, y: 78, w: 32, h: 32 };      /* case */
+    const h = e.h, w = Math.round(h * 0.95);
+    if (e.mount === "wall") {
+      /* Ordinary panels hang above head height; monumental ones come down
+         nearly to the floor, because that is the only way to fit them. */
+      const bottom = h <= 50 ? 96 : FLOOR_Y - 4;
+      const top = Math.max(18, bottom - h);
+      return { x: e.x - w / 2, y: top, w, h: bottom - top };
+    }
+    if (e.mount === "plinth") {
+      const plinthTop = Math.max(FLOOR_Y - 48, Math.min(FLOOR_Y - 4, Math.round(74 + h / 2)));
+      return { x: e.x - w / 2, y: plinthTop - h, w, h, plinthTop };
+    }
+    const bottom = 92;                       /* case */
+    return { x: e.x - w / 2, y: bottom - h, w, h, caseBottom: bottom };
   }
 
   /* ---------- world drawing --------------------------------------------------- */
@@ -186,6 +257,10 @@
     rect(x0, WALL_TOP, V.DOOR, FLOOR_Y - WALL_TOP, C.wallShade);
     const dx = x0 + 10, dw = V.DOOR - 20;
     rect(dx, 34, dw, FLOOR_Y - 34, C.door);
+    /* the far wall and floor of whatever is through there, dimly */
+    rect(dx + 2, 46, dw - 4, 44, "#1b1710");
+    rect(dx + 2, 90, dw - 4, FLOOR_Y - 90, "#231d14");
+    rect(dx + 2, 62, dw - 4, 1, "#2b2418");
     rect(dx - 2, 32, dw + 4, 3, C.arch);
     rect(dx - 2, 32, 2, FLOOR_Y - 32, C.arch);
     rect(dx + dw, 32, 2, FLOOR_Y - 32, C.arch);
@@ -197,8 +272,17 @@
     rect(dx, FLOOR_Y - 4, dw, 4, "#241e14");
   }
 
-  /* A soft cone of light from the track down onto a wall exhibit. */
+  /* A soft cone from the track, plus the pool it throws on the floor. */
   function spotlight(wx, top, bottom) {
+    const pool = ctx.createRadialGradient(sx(wx), sy(FLOOR_Y + 14), 2, sx(wx), sy(FLOOR_Y + 14), 44);
+    pool.addColorStop(0, "rgba(255,222,150,0.10)");
+    pool.addColorStop(1, "rgba(255,222,150,0)");
+    ctx.fillStyle = pool;
+    ctx.fillRect(sx(wx) - 46, sy(FLOOR_Y), 92, (V.H - FLOOR_Y) * SCALE);
+    cone(wx, top, bottom);
+  }
+
+  function cone(wx, top, bottom) {
     const g = ctx.createLinearGradient(0, sy(WALL_TOP), 0, sy(bottom));
     g.addColorStop(0, "rgba(255,222,150,0.16)");
     g.addColorStop(1, "rgba(255,222,150,0)");
@@ -212,60 +296,83 @@
     ctx.fill();
   }
 
+  function artAt(e, b) {
+    const px = Math.round(b.h * SCALE);
+    return S7.artifacts.scaledFor(e.a, px);
+  }
+
+  function outlineBox(b, colour) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx(b.x) - 3, sy(b.y) - 3, Math.round(b.w * SCALE) + 6, Math.round(b.h * SCALE) + 6);
+  }
+
   function drawExhibit(e, S) {
+    if (dragEx && dragEx.e === e) return;          /* it is in the curator's hands */
     const b = exhibitBox(e);
     if (b.x + b.w < cam - 20 || b.x > cam + VIEW + 20) return;
-    const sprite = S7.artifacts.spriteFor(e.a);
-    const isHover = hover === e;
+    const art = artAt(e, b);
+    const aw = Math.round(b.w * SCALE), ah = Math.round(b.h * SCALE);
+    const ring = selected === e ? "#e8c66a" : hover === e ? "#c79a42" : null;
 
     if (e.mount === "wall") {
-      spotlight(e.x, 30, 84);
-      /* frame shadow, then the piece itself at 1:1 */
+      spotlight(e.x, 30, b.y + b.h + 8);
       ctx.fillStyle = "#00000055";
-      ctx.fillRect(sx(b.x) + 3, sy(b.y) + 4, b.w * SCALE, b.h * SCALE);
-      ctx.drawImage(sprite, sx(b.x), sy(b.y), b.w * SCALE, b.h * SCALE);
-      if (isHover) {
-        ctx.strokeStyle = "#c79a42";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(sx(b.x) - 2, sy(b.y) - 2, b.w * SCALE + 4, b.h * SCALE + 4);
-      }
-      /* hanging wire up to the rail */
-      rect(e.x - 1, RAIL_Y, 1, b.y - RAIL_Y, "#5a4e35");
+      ctx.fillRect(sx(b.x) + 3, sy(b.y) + 4, aw, ah);
+      ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
+      if (ring) outlineBox(b, ring);
+      if (b.y > RAIL_Y + 2) rect(e.x - 1, RAIL_Y, 1, b.y - RAIL_Y, "#5a4e35");
     } else if (e.mount === "plinth") {
-      spotlight(e.x, 30, 100);
-      rect(e.x - 11, 96, 22, 28, C.plinth);
-      rect(e.x - 11, 96, 22, 2, C.plinthTop);
-      rect(e.x + 6, 98, 5, 26, C.plinthShade);
-      ctx.drawImage(sprite, sx(b.x), sy(b.y), b.w * SCALE, b.h * SCALE);
-      if (isHover) {
-        ctx.strokeStyle = "#c79a42";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(sx(b.x) - 2, sy(b.y) - 2, b.w * SCALE + 4, b.h * SCALE + 4);
-      }
-      /* rope barrier in front */
-      rect(e.x - 15, 128, 1, 6, C.rope);
-      rect(e.x + 14, 128, 1, 6, C.rope);
-      rect(e.x - 15, 129, 30, 1, C.rope);
+      spotlight(e.x, 30, b.plinthTop);
+      const pw = Math.max(14, Math.round(b.w * 0.78));
+      rect(e.x - pw / 2, b.plinthTop, pw, FLOOR_Y + 8 - b.plinthTop, C.plinth);
+      rect(e.x - pw / 2, b.plinthTop, pw, 2, C.plinthTop);
+      rect(e.x + pw / 2 - 5, b.plinthTop + 2, 5, FLOOR_Y + 6 - b.plinthTop, C.plinthShade);
+      ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
+      if (ring) outlineBox(b, ring);
+      const rw = Math.max(pw + 8, 26);
+      rect(e.x - rw / 2, FLOOR_Y + 14, 1, 6, C.rope);
+      rect(e.x + rw / 2, FLOOR_Y + 14, 1, 6, C.rope);
+      rect(e.x - rw / 2, FLOOR_Y + 15, rw, 1, C.rope);
     } else {
-      /* low case: base, glass, and a reflection streak */
-      spotlight(e.x, 30, 96);
-      rect(e.x - 13, 110, 26, 16, C.caseFrame);
-      rect(e.x - 13, 110, 26, 1, "#6b5f47");
-      ctx.drawImage(sprite, sx(b.x), sy(b.y), b.w * SCALE, b.h * SCALE);
-      ctx.globalAlpha = 0.16;
-      rect(e.x - 15, 74, 30, 38, C.caseGlass);
-      ctx.globalAlpha = 0.28;
-      rect(e.x - 9, 76, 2, 34, "#ffffff");
+      /* Two distinct parts: a warm timber pedestal and a dark vitrine on top.
+         Drawn in one colour they read as a single filing cabinet. */
+      const cw = Math.max(20, b.w + 10);
+      const pw = cw + 4;
+      const glassTop = b.y - 7;
+      spotlight(e.x, 30, glassTop + 6);
+
+      rect(e.x - pw / 2, b.caseBottom, pw, FLOOR_Y + 8 - b.caseBottom, C.ped);
+      rect(e.x - pw / 2, b.caseBottom, pw, 2, C.pedTop);
+      rect(e.x + pw / 2 - 4, b.caseBottom + 2, 4, FLOOR_Y + 6 - b.caseBottom, C.pedShade);
+      rect(e.x - pw / 2, FLOOR_Y + 5, pw, 3, C.pedShade);
+
+      ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
+
+      ctx.globalAlpha = 0.14;
+      rect(e.x - cw / 2, glassTop, cw, b.caseBottom - glassTop, C.caseGlass);
+      ctx.globalAlpha = 0.30;                       /* the streak of reflected light */
+      rect(e.x - cw / 2 + 4, glassTop + 2, 2, b.caseBottom - glassTop - 4, "#ffffff");
       ctx.globalAlpha = 1;
-      rect(e.x - 15, 74, 1, 38, C.caseFrame);
-      rect(e.x + 14, 74, 1, 38, C.caseFrame);
-      rect(e.x - 15, 74, 30, 1, C.caseFrame);
-      if (isHover) {
-        ctx.strokeStyle = "#c79a42";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(sx(e.x - 15) - 2, sy(74) - 2, 30 * SCALE + 4, 38 * SCALE + 4);
-      }
+      rect(e.x - cw / 2, glassTop, 1, b.caseBottom - glassTop, C.caseEdge);
+      rect(e.x + cw / 2, glassTop, 1, b.caseBottom - glassTop, C.caseEdge);
+      rect(e.x - cw / 2, glassTop, cw, 2, C.caseFrame);
+      rect(e.x - cw / 2, glassTop + 1, cw, 1, C.caseEdge);
+      if (ring) outlineBox({ x: e.x - cw / 2, y: glassTop, w: cw, h: b.caseBottom - glassTop }, ring);
     }
+  }
+
+  /* Somewhere to sit. Slatted, because a solid block reads as a plinth. */
+  function drawBench(bn) {
+    if (bn.x < cam - 40 || bn.x > cam + VIEW + 40) return;
+    const w = 34;
+    rect(bn.x - w / 2, 140, w, 3, "#6b5a3a");
+    rect(bn.x - w / 2, 140, w, 1, "#87724a");
+    rect(bn.x - w / 2, 144, w, 2, "#5a4c30");
+    rect(bn.x - w / 2 + 2, 146, 3, 6, "#4a3f28");
+    rect(bn.x + w / 2 - 5, 146, 3, 6, "#4a3f28");
+    ctx.fillStyle = C.shadow;
+    ctx.fillRect(sx(bn.x - w / 2), sy(152), Math.round(w * SCALE), 3);
   }
 
   function drawAgent(a) {
@@ -282,12 +389,13 @@
     ctx.fill();
 
     let frame;
-    if (a.state === "view") frame = s.back;
+    if (a.state === "sit") frame = s.sit;
+    else if (a.state === "view") frame = s.back;
     else frame = s.frames[1 + (Math.floor(a.phase) % 4)];
 
     /* People further back sit in less light. */
     ctx.globalAlpha = 0.82 + a.z * 0.18;
-    if (a.dir < 0 && a.state !== "view") {
+    if (a.dir < 0 && a.state !== "view" && a.state !== "sit") {
       ctx.save();
       ctx.translate(px + s.w * PERSON, py);
       ctx.scale(-1, 1);
@@ -310,7 +418,8 @@
 
   function drawLabel(e) {
     const b = exhibitBox(e);
-    const x = sx(e.x), y = sy(e.mount === "wall" ? 82 : e.mount === "plinth" ? 130 : 132);
+    const x = sx(e.x);
+    const y = e.mount === "wall" ? sy(b.y + b.h) + 12 : sy(FLOOR_Y + 12);
     if (x < -80 || x > CW + 80) return;
     ctx.font = "9px ui-monospace, monospace";
     ctx.textAlign = "center";
@@ -332,6 +441,41 @@
     ctx.fillStyle = "#6b6152";
     ctx.fillText(r.era.period, x, sy(PLAQUE_Y) + 12);
     ctx.textAlign = "left";
+  }
+
+  /* The card beside the piece, the way a real gallery names things. */
+  function drawWallLabel(e) {
+    const b = exhibitBox(e);
+    const cu = S7.cultures.byId[e.a.cultureId];
+    const lines = [
+      e.a.name,
+      (cu ? cu.name : "Unattributed") + " · " + (cu ? cu.period : "—"),
+      S7.artifacts.materialLabel(e.a.material) + " · " + e.a.condition.n,
+      "Item " + e.a.no + " · " + e.a.depth.toFixed(1) + " m",
+    ];
+    ctx.font = "10px ui-monospace, monospace";
+    const w = Math.max(...lines.map((l, i) => ctx.measureText(l).width + (i === 0 ? 2 : 0))) + 16;
+    const h = lines.length * 12 + 12;
+    /* to the right of the piece unless that runs off the canvas */
+    let x = sx(b.x + b.w) + 12;
+    if (x + w > CW - 6) x = sx(b.x) - w - 12;
+    x = Math.max(6, Math.min(CW - w - 6, x));
+    const y = Math.max(6, Math.min(CH - h - 6, sy(b.y) + 4));
+
+    ctx.fillStyle = "#12100aee";
+    ctx.strokeStyle = "#8a6a2c";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 2); else ctx.rect(x, y, w, h);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#8a6a2c";
+    ctx.fillRect(x, y, w, 2);
+
+    lines.forEach((l, i) => {
+      ctx.font = i === 0 ? "600 10px ui-monospace, monospace" : "10px ui-monospace, monospace";
+      ctx.fillStyle = i === 0 ? "#e8e1d1" : i === 1 ? "#c79a42" : "#a99f88";
+      ctx.fillText(l, x + 8, y + 17 + i * 12);
+    });
   }
 
   /* Bubbles claim space for the frame; later ones are pushed upward until they
@@ -425,15 +569,38 @@
        visitor can walk behind a plinth and in front of the next one. */
     const items = [];
     for (const e of L.exhibits)
-      items.push({ y: e.mount === "wall" ? 0 : e.mount === "plinth" ? 124 : 126, fn: () => drawExhibit(e, S) });
+      items.push({ y: e.mount === "wall" ? 0 : FLOOR_Y + 8, fn: () => drawExhibit(e, S) });
+    for (const bn of L.benches)
+      items.push({ y: V.BENCH_Y - 4, fn: () => drawBench(bn) });
     for (const a of crowd.agents)
       items.push({ y: V.feetY(a), fn: () => drawAgent(a) });
     items.sort((p, q) => p.y - q.y);
     for (const it of items) it.fn();
 
+    /* the piece currently being carried, and where it would land */
+    if (dragEx) {
+      const drop = dropTarget(pointer.x);
+      if (drop) {
+        const room = L.rooms.find((r) => r.era.id === drop.roomId);
+        if (room) {
+          let gx = room.x + V.ROOM_PAD;
+          let n = 0;
+          for (const e of room.exhibits) { if (e === dragEx.e) continue; if (n++ >= drop.index) break; gx = e.x + e.w / 2; }
+          ctx.fillStyle = "#c79a42";
+          ctx.fillRect(sx(gx) - 1, sy(30), 2, (FLOOR_Y - 30) * SCALE);
+        }
+      }
+      const b = exhibitBox(dragEx.e);
+      const aw = Math.round(b.w * SCALE), ah = Math.round(b.h * SCALE);
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(artAt(dragEx.e, b), Math.round(pointer.x - aw / 2), Math.round(pointer.y - ah / 2), aw, ah);
+      ctx.globalAlpha = 1;
+    }
+
     /* overlay */
     for (const r of L.rooms) drawRoomPlaque(r);
     for (const e of L.exhibits) drawLabel(e);
+    if (selected && L.exhibits.indexOf(selected) >= 0) drawWallLabel(selected);
     bubbleRects = [];
     for (const a of crowd.agents) drawBubble(a);
 
@@ -483,6 +650,7 @@
 
   S7.galleryView = {
     init, draw, rooms, currentRoom, goToRoom, nudge, invalidate,
+    setArrange, isArranging, isDragging, probe, clearSelection,
     CW, CH, SCALE, VIEW,
   };
 })(window.S7 = window.S7 || {});

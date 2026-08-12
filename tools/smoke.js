@@ -149,18 +149,74 @@ function serve() {
     return out;
   });
 
-  /* Exercise the museum and research tabs so their renderers run. */
+  /* Give the live state a collection so the museum renderers have something to
+     draw, weighted toward the top of the shaft so room 0 is worth testing. */
   await page.evaluate(() => {
+    const S = S7.debug.state();
     for (let i = 0; i < 40; i++) {
-      const a = S7.artifacts.makeArtifact((Math.random() * 1e9) | 0, 40 + i * 20);
+      const depth = i < 12 ? 2 + i * 1.2 : 40 + i * 20;
+      const a = S7.artifacts.makeArtifact((Math.random() * 1e9) | 0, depth);
       a.no = String(i + 1).padStart(3, "0");
       a.display = true;
-      window.__S && window.__S.collection.push(a);
+      S.collection.push(a);
     }
+    S7.visitors.invalidate();
   });
   await page.click('[data-tab="museum"]');
   await page.waitForTimeout(400);
   await page.screenshot({ path: "tools/shot-02-museum.png" });
+  /* Rehanging: pick a piece up off the wall and drop it further along, using
+     synthetic pointer events so the check does not depend on where the page
+     happens to have laid the canvas out. */
+  await page.evaluate(() => S7.debug.tab("museum"));
+  await page.waitForTimeout(700);
+  const rehang = await page.evaluate(async () => {
+    const S = S7.debug.state();
+    const cv = document.getElementById("c-gallery");
+    if (!cv) return "no gallery canvas";
+    document.getElementById("gal-arrange").click();
+    S7.galleryView.goToRoom(0);
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const room = S7.visitors.getLayout(S).rooms[0];
+    if (room.exhibits.length < 3) return "ok (room 0 too small to test)";
+    const before = room.exhibits.map((e) => e.a.no).join(",");
+    const cam = S7.galleryView.probe(0, 0).cam;
+    const e0 = room.exhibits[0], last = room.exhibits[room.exhibits.length - 1];
+    const by = e0.mount === "wall" ? (e0.h <= 50 ? 96 : 108) - e0.h
+             : e0.mount === "plinth" ? Math.max(64, Math.min(108, Math.round(74 + e0.h / 2))) - e0.h
+             : 92 - e0.h;
+    const from = { x: (e0.x - cam) * 2, y: (by + e0.h / 2) * 2 };
+    const to = { x: (last.x + 24 - cam) * 2, y: 210 };
+
+    const r = cv.getBoundingClientRect();
+    const fire = (type, cx, cy) => cv.dispatchEvent(new PointerEvent(type, {
+      pointerId: 1, pointerType: "mouse", isPrimary: true, bubbles: true, cancelable: true,
+      clientX: r.left + (cx / cv.width) * r.width,
+      clientY: r.top + (cy / cv.height) * r.height,
+    }));
+    fire("pointerdown", from.x, from.y);
+    if (!S7.galleryView.isDragging()) return "did not pick the piece up";
+    fire("pointermove", to.x, to.y);
+    fire("pointerup", to.x, to.y);
+    await new Promise((r2) => setTimeout(r2, 250));
+    const after = S7.visitors.getLayout(S).rooms[0].exhibits.map((e) => e.a.no).join(",");
+    document.getElementById("gal-arrange").click();
+    return before === after ? "drop did not reorder (" + before + ")" : "ok";
+  });
+
+  /* Physical sizes should span from bead to monument, not cluster on one value. */
+  const sizes = await page.evaluate(() => {
+    const hs = [];
+    for (let i = 0; i < 400; i++) {
+      const a = S7.artifacts.makeArtifact((Math.random() * 1e9) | 0, 20 + Math.random() * 800);
+      hs.push(S7.artifacts.physical(a).h);
+    }
+    hs.sort((x, y) => x - y);
+    return { min: hs[0], median: hs[200], max: hs[hs.length - 1],
+             monuments: hs.filter((h) => h >= 58).length };
+  });
+
   await page.click('[data-tab="research"]');
   await page.waitForTimeout(300);
   await page.screenshot({ path: "tools/shot-03-research.png" });
@@ -195,9 +251,12 @@ function serve() {
   console.log("  traditions on display:", sim.cultures, "· all finite:", sim.finite);
   console.log("save round-trip:", saveOk);
   console.log("art generators:", genErrors.length ? genErrors.slice(0, 20) : "all clean");
+  console.log("artifact sizes:", JSON.stringify(sizes));
+  console.log("rehang:", rehang);
   console.log("console errors:", errors.length ? errors.slice(0, 20) : "none");
 
-  const failed = errors.length || genErrors.length || saveOk !== "ok" || !sim.finite;
+  const failed = errors.length || genErrors.length || saveOk !== "ok" || !sim.finite ||
+                 !/^ok/.test(rehang) || sizes.max < 50 || sizes.min > 14;
   if (failed) { console.error("\nSMOKE FAILED"); process.exit(1); }
   console.log("\nSMOKE OK");
 })();

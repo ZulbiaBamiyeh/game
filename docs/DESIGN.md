@@ -142,9 +142,42 @@ strip, one room per depth band in depth order, joined by doorways. Drag it, whee
 it, arrow-key it, or use the room dots. Clicking any exhibit opens its record.
 
 Exhibits are mounted by class — paintings hang on the wall under a spotlight,
-sculpture goes on a plinth behind a rope, objects sit in low glass cases — and
-everything that stands on the floor, visitors included, is depth-sorted together,
-so a visitor can walk behind one plinth and in front of the next.
+sculpture goes on a plinth behind a rope, objects sit in vitrines on timber
+pedestals — and everything that stands on the floor, visitors included, is
+depth-sorted together, so a visitor can walk behind one plinth and in front of
+the next.
+
+**Everything has a real size.** `physical(a)` gives each artifact a display
+height in logical pixels, from a table keyed on object type, carver or painter,
+then jittered per seed, scaled by condition, and occasionally — likeliest for
+significant pieces — multiplied into something monumental. The range runs from a
+7-pixel bottle cap to a 96-pixel panel that fills the wall from skirting to
+picture rail. A handheld console is 13; a portrait bust is 31; a T-pillar is 70
+and stands taller than the people looking at it. Slot widths come from the same
+number, so a colossal head is given a bay of wall and a bead is not.
+
+Rendering an arbitrary size without wrecking the pixels takes two paths:
+downscales are smoothed, because nearest-neighbour below 1:1 drops whole rows out
+of the art; upscales go nearest-neighbour to the next whole multiple and are then
+smoothed down to the target, which keeps hard pixel edges instead of producing
+rows two wide beside rows three wide.
+
+**Benches**, one per stretch of room. Elders head for them readily, everyone else
+after they have been walking a while; a seated visitor gets a separate sprite
+with the hips at seat height. Seats are claimed, so two people never occupy one.
+
+**Rehanging.** The `Rehang` toggle turns dragging from panning the building into
+carrying a piece. Drop it anywhere along the wall or through a doorway into
+another room; a gold line shows where it will land, and carrying it to the edge
+of the frame walks the building along under it. Rooms are era bands by default,
+but `a.room` and `a.slot` override that and both are saved — the hang is the
+curator's, not the stratigraphy's.
+
+**Clicking says what it is.** A click selects: the piece gets a ring, a gallery
+label appears beside it with name, tradition, period, support and accession
+number, and the caption bar under the floor fills in with condition, rarity,
+depth and the field notes. Double-click, or the button in the caption, opens the
+full record.
 
 **The crowd.** Visitors are pixel people generated from a seed like everything
 else, baked once into stand / four-frame walk / back-view. Seven archetypes —
@@ -410,14 +443,12 @@ Ranked by value per unit of work.
    Gives the store a purpose beyond overflow.
 4. **Loans and exhibitions.** Send a piece away for a period: lose its display
    contribution, gain a large lump and a rating bump on return.
-5. **A curator's eye.** Let the player drag exhibits between positions and rooms, and
-   pay for coherent groupings. The floor view already makes the arrangement visible;
-   making it editable turns it into a decision.
-6. **Benches, and visitors who use them.** The elders already carry sticks and walk
-   slowly; giving them somewhere to sit is two hours of work and a lot of character.
-7. **Deeper keystone chain.** The floor at 830 m ends the story cleanly; the anachronic
+5. **Pay for a good hang.** Rearranging works, but nothing rewards it yet. A
+   coherence bonus — pieces of one tradition kept together, sizes alternating
+   rather than clumping — would turn the Rehang mode from a toy into a decision.
+6. **Deeper keystone chain.** The floor at 830 m ends the story cleanly; the anachronic
    band could carry two or three more written finds before it.
-8. **Mobile polish.** It reflows and the excavation works with touch, but the stat bar
+7. **Mobile polish.** It reflows and the excavation works with touch, but the stat bar
    wants a compact mode and the modals want to be sheets.
 
 ---

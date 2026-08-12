@@ -168,9 +168,26 @@
     ceramic: ["Evenly fired throughout, which takes a controlled kiln.",
               "The fabric contains a temper I do not recognise.",
               "Wheel-thrown, walls under four millimetres. Confident work."],
+    pigment: ["The binder has not been identified. It is not any of the usual ones.",
+              "Pigment sits directly on the ground layer with no size between them.",
+              "Applied wet into wet, which means it was finished in one working.",
+              "The support is sound. Nothing has been consolidated or relined."],
     other: ["Retained for further analysis.",
             "Photographed and recorded before lifting.",
             "Catalogued from the field. The full record will follow."],
+  };
+
+  /* What a painting is actually on. "Paper" for a Roman fresco and a Song
+     scroll alike was wrong on the label and, worse, pulled the note pool for
+     organic finds — which is how a framed print ended up described as having
+     butchery marks near one end. */
+  const PAINTING_SUPPORT = {
+    modern: "canvas", victorian: "canvas", anachronic: "canvas",
+    renaissance: "panel", byzantine: "panel",
+    ukiyoe: "printpaper", maya: "barkpaper", miniature: "vellum",
+    song: "silk", norse: "plank", islamic: "tile", greek: "vasefabric",
+    roman: "plaster", egyptian: "plaster", minoan: "plaster", neolithic: "plaster",
+    palaeo: "rockface", neander: "rockface", unattributed: "unknownpig",
   };
 
   const MATERIAL_FAMILY = {
@@ -180,6 +197,9 @@
     chalk: "stone", ice: "stone",
     bone: "organic", leather: "organic", wood: "organic", paper: "organic",
     clay: "ceramic", sand: "ceramic", celadon: "ceramic", glass: "ceramic",
+    canvas: "pigment", panel: "pigment", printpaper: "pigment", barkpaper: "pigment",
+    vellum: "pigment", silk: "pigment", plank: "pigment", plaster: "pigment",
+    rockface: "pigment", unknownpig: "pigment", tile: "ceramic", vasefabric: "ceramic",
   };
 
   const MATERIAL_LABEL = {
@@ -190,6 +210,12 @@
     bone: "Bone", leather: "Leather and paper", wood: "Timber", paper: "Paper",
     clay: "Fired clay", sand: "Fired clay, buff", celadon: "Glazed ceramic", glass: "Glass",
     plastic: "Moulded polymer", lcd: "Glass and polymer", timber: "Timber",
+    canvas: "Oil on canvas", panel: "Tempera on panel",
+    printpaper: "Woodblock print on paper", barkpaper: "Pigment on bark paper",
+    vellum: "Gouache and gold on vellum", silk: "Ink and colour on silk",
+    plank: "Pigment on worked timber", plaster: "Pigment on lime plaster",
+    rockface: "Pigment on detached rock", unknownpig: "Pigment, unidentified binder",
+    tile: "Glazed ceramic tile", vasefabric: "Slip on fired clay",
   };
 
   /* ---------- interpretation ---------------------------------------------
@@ -237,7 +263,8 @@
 
   function materialOf(rng, kind, culture, objectType) {
     if (kind === "sculpture") return rng.pick(culture.sculpture.materials);
-    if (kind === "painting") return "paper";
+    if (kind === "painting")
+      return PAINTING_SUPPORT[(culture.painting || {}).painter] || "panel";
     const guess = {
       coin: ["silver", "gold", "bronze", "brass"], blade: ["bronze", "iron", "steel", "obsid"],
       vessel: ["clay", "sand", "celadon", "stone"], sherd: ["clay", "sand", "stone"],
@@ -339,6 +366,65 @@
     return a;
   }
 
+  /* ---------- physical size ------------------------------------------------
+     How big the thing actually is, in the gallery's logical pixels, where the
+     wall is 98 tall and a visitor is 33. Everything used to draw at one size,
+     which made a handheld console the same height as a portrait bust.
+
+     `h` is display height; `w` is how much wall it needs, which is more than
+     its own width because things need air around them. */
+
+  const OBJECT_SIZE = {
+    cap: 7, coin: 10, tag: 10, seal: 11, watch: 11, bead: 12, needle: 12,
+    buckle: 12, key: 13, nail: 13, lamp: 13, console: 13, spearpoint: 15,
+    handaxe: 15, torc: 17, sherd: 16, figurine: 17, astrolabe: 17, ledger: 17,
+    mirror: 19, bottle: 19, tablet: 19, bell: 20, bonefrag: 21, blade: 24,
+    vessel: 29, blockStone: 32, marker: 36,
+  };
+
+  const CARVER_SIZE = {
+    venus: 15, neanderForm: 15, antler: 17, shabti: 21, cycladic: 23,
+    dogu: 25, castHead: 27, bust: 31, anachronicBust: 31, beastStatue: 35,
+    coveredFace: 36, torso: 42, soldier: 45, colossal: 62, stele: 70,
+  };
+
+  const PAINTER_SIZE = {
+    miniature: 13, maya: 19, greek: 21, ukiyoe: 23, byzantine: 27, norse: 29,
+    renaissance: 30, modern: 31, anachronic: 31, minoan: 31, victorian: 35,
+    islamic: 35, unattributed: 35, song: 41, neolithic: 43, egyptian: 45,
+    neander: 45, roman: 47, palaeo: 51,
+  };
+
+  const MIN_H = 7, MAX_H = 96;
+
+  function physical(a) {
+    if (a._phys) return a._phys;
+    const cu = C.byId[a.cultureId];
+    let base;
+    if (a.kind === "object") base = OBJECT_SIZE[a.objectType] || 18;
+    else if (a.kind === "sculpture") base = CARVER_SIZE[(cu && cu.sculpture) ? cu.sculpture.carver : "bust"] || 30;
+    else base = PAINTER_SIZE[(cu && cu.painting) ? cu.painting.painter : "modern"] || 30;
+
+    /* Same seed, different stream: size must not shift if the text tables move. */
+    const rng = S7.rng((a.seed ^ 0x2545f491) >>> 0);
+    let h = base * rng.range(0.82, 1.24);
+
+    /* Fragments are what is left of something. Exceptional pieces survived
+       whole, which usually means they were bigger to begin with. */
+    h *= 0.80 + a.condition.mult * 0.16;
+
+    /* Now and then the deposit gives up something monumental — a wall-filling
+       panel, a pillar taller than the people looking at it. Significance makes
+       it likelier, and those are the pieces a room gets built around. */
+    const monumentChance = a.kind === "object" ? 0.015 : 0.05 + Math.min(0.16, a.significance / 340);
+    if (rng.chance(monumentChance)) h *= rng.range(1.9, 2.9);
+
+    h = Math.max(MIN_H, Math.min(MAX_H, Math.round(h)));
+    const monumental = h >= 58;
+    const w = Math.max(30, Math.round(h * (a.kind === "painting" ? 1.18 : 0.95)) + 22);
+    return (a._phys = { h, w, monumental });
+  }
+
   /* ---------- art dispatch ------------------------------------------------ */
 
   const spriteCache = new Map();
@@ -372,10 +458,44 @@
     return t;
   }
 
+  /* An artifact at an arbitrary pixel size, cached.
+
+     Downscales are smoothed, because nearest-neighbour below 1:1 drops whole
+     pixel rows out of the art. Upscales go nearest-neighbour to the next whole
+     multiple first and are then smoothed down to the target, which keeps the
+     hard pixel edges instead of producing rows that are two wide next to rows
+     that are three wide. */
+  const scaleCache = new Map();
+
+  function scaledFor(a, px) {
+    px = Math.max(4, Math.round(px));
+    const src = spriteFor(a);
+    if (px === S7.raster.SZ) return src;
+    const key = a.seed + ":" + (a.objectType || a.kind) + ":s" + px;
+    let c = scaleCache.get(key);
+    if (c) return c;
+
+    if (px < S7.raster.SZ) {
+      c = S7.raster.thumb(src, px);
+    } else {
+      const mult = Math.ceil(px / S7.raster.SZ);
+      const big = document.createElement("canvas");
+      big.width = big.height = S7.raster.SZ * mult;
+      const bg = big.getContext("2d");
+      bg.imageSmoothingEnabled = false;
+      bg.drawImage(src, 0, 0, big.width, big.height);
+      if (big.width === px) c = big;
+      else c = S7.raster.thumb(big, px);
+    }
+    if (scaleCache.size > 260) scaleCache.clear();
+    scaleCache.set(key, c);
+    return c;
+  }
+
   const materialLabel = (m) => MATERIAL_LABEL[m] || "Undetermined";
 
   S7.artifacts = {
-    CONDITIONS, RARITIES, makeArtifact, spriteFor, thumbFor, materialLabel,
-    OBJECT_NOUNS,
+    CONDITIONS, RARITIES, makeArtifact, spriteFor, thumbFor, scaledFor,
+    materialLabel, physical, OBJECT_NOUNS,
   };
 })(window.S7 = window.S7 || {});

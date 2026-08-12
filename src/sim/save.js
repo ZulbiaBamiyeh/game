@@ -16,6 +16,7 @@
       s: a.seed, d: a.depth, c: a.cultureId, k: a.kind, o: a.objectType,
       m: a.material, cd: a.condition.id, r: a.rarity.id, n: a.no,
       b: a.boon, disp: a.display !== false, ks: !!a.keystone,
+      rm: a.room, sl: a.slot,
       nm: a.keystone ? a.name : undefined, nt: a.keystone ? a.notes : undefined,
     };
   }
@@ -28,6 +29,8 @@
     });
     a.no = p.n;
     a.display = p.disp !== false;
+    if (p.rm) a.room = p.rm;
+    if (p.sl !== undefined) a.slot = p.sl;
     /* The boon was rolled once and is authoritative — never re-roll on load,
        or a save would silently change the player's build. */
     if (p.b) a.boon = p.b;

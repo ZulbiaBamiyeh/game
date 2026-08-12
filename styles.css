@@ -213,9 +213,21 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .galroom{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .galroom b{color:var(--bone);font-weight:400;margin-right:8px}
+.galtools{display:flex;align-items:center;gap:12px;flex:none}
+.galtools .ghost{padding:4px 9px}
+.galtools .ghost.on{color:var(--ochre);border-color:var(--ochre-2);background:#2b2213}
 .galdots{display:flex;gap:4px;flex:none}
 .galdots i{width:6px;height:6px;background:#2d2617;border:1px solid var(--line);cursor:pointer;display:block}
 .galdots i.on{background:var(--ochre);border-color:var(--ochre)}
+
+.caption{margin-top:9px;border-top:1px solid var(--line);padding-top:9px;min-height:52px}
+.caphint{font-size:10.5px;color:var(--ink-3);margin:0;line-height:1.6}
+.capname{font-size:13px;color:var(--bone);margin:0 0 2px}
+.capmeta{font-size:10.5px;color:var(--ochre-2);margin:0 0 3px;letter-spacing:.04em}
+.capnote{font-size:10.5px;color:var(--ink-3);margin:0;line-height:1.55}
+.caprow{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.caprow>div{min-width:0}
+.capdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
 
 /* ---------- museum -------------------------------------------------------- */
 

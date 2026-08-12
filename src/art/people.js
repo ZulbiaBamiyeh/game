@@ -128,6 +128,44 @@
     }
   }
 
+  /* Seated on a bench: hips at seat height, shins dropping to the floor, and
+     the whole figure four pixels shorter than standing. */
+  function drawSitting(ctx, p) {
+    const put = (x, y, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, 1, 1); };
+    const box = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+    const cx = 8;
+    const top = (p.small ? 3 : 0) + 4;
+    const hairY = top, headY = top + 1, torsoY = top + 8, hipY = top + 15;
+
+    /* thighs forward, shins down */
+    box(cx - 4, hipY, 8, 3, p.bottom);
+    box(cx + 1, hipY, 5, 3, p.bottom);
+    for (const lx of [cx + 2, cx + 5]) {
+      box(lx, hipY + 3, 2, GROUND - hipY - 3, p.bottom);
+      box(lx, GROUND, 2, 1, p.shoe);
+    }
+
+    box(cx - 4, torsoY, 8, hipY - torsoY + 1, p.top);
+    ctx.globalAlpha = 0.22;
+    box(cx + 1, torsoY, 3, hipY - torsoY + 1, "#000");
+    ctx.globalAlpha = 1;
+    /* forearms resting on the knees */
+    box(cx + 3, torsoY + 2, 1, 4, p.top);
+    box(cx - 5, torsoY + 2, 1, 4, p.top);
+    put(cx + 3, torsoY + 6, p.skin);
+    put(cx - 5, torsoY + 6, p.skin);
+
+    box(cx - 1, torsoY - 1, 2, 1, p.skin);
+    box(cx - 2, headY, 5, 6, p.skin);
+    box(cx - 2, hairY, 5, 2, p.hair);
+    if (p.longHair) { box(cx - 3, headY, 1, 5, p.hair); box(cx + 3, headY, 1, 5, p.hair); }
+    if (p.hat) { box(cx - 4, hairY - 1, 9, 2, p.hatColour); box(cx - 2, hairY - 2, 5, 1, p.hatColour); }
+    put(cx - 1, headY + 3, "#20160f");
+    put(cx + 1, headY + 3, "#20160f");
+    if (p.stick) box(cx - 6, torsoY + 1, 1, GROUND - torsoY - 1, "#5a4632");
+    if (p.bag) box(cx - 7, hipY, 3, 4, p.bagColour);
+  }
+
   /* ---------- baking ------------------------------------------------------- */
 
   const cache = new Map();
@@ -164,8 +202,10 @@
     }
     const back = frameCanvas();
     drawPerson(back.getContext("2d"), p, 0, true);
+    const sit = frameCanvas();
+    drawSitting(sit.getContext("2d"), p);
 
-    const out = { frames, back, w: W, h: H, type, look: p };
+    const out = { frames, back, sit, w: W, h: H, type, look: p };
     if (cache.size > 300) cache.clear();
     cache.set(key, out);
     return out;

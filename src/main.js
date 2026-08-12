@@ -247,6 +247,34 @@
 
   /* ---------- the gallery floor --------------------------------------------------- */
 
+  /* The label under the floor: what you just clicked on. */
+  function showCaption(a) {
+    const box = $("gal-caption");
+    if (!a) {
+      box.innerHTML = '<p class="caphint">Click a piece to read its label. ' +
+        'Double-click for the full record.</p>';
+      return;
+    }
+    const cu = S7.cultures.byId[a.cultureId];
+    const era = S7.cultures.eraAt(a.depth);
+    const phys = S7.artifacts.physical(a);
+    box.innerHTML =
+      '<div class="caprow"><div>' +
+      '<p class="capname"><span class="capdot ' + a.rarity.css + '"></span>' + V.esc(a.name) + '</p>' +
+      '<p class="capmeta">' + V.esc(cu ? cu.name : "Unattributed") +
+      ' · ' + V.esc(cu ? cu.period : "no accepted context") +
+      ' · ' + V.esc(S7.artifacts.materialLabel(a.material)) + '</p>' +
+      '<p class="capnote">Item ' + a.no + ' · ' + V.esc(a.condition.n) + ' · ' + V.esc(a.rarity.n) +
+      ' · lifted at ' + a.depth.toFixed(1) + ' m from the ' + V.esc(era.name.toLowerCase()) +
+      (phys.monumental ? ' · <b>monumental</b>' : '') + '</p>' +
+      '<p class="capnote" style="margin-top:5px">' + V.esc(a.notes) + '</p>' +
+      '</div>' +
+      '<button class="action" id="cap-open" style="width:auto;flex:none">' +
+      '<span class="bt">Full record</span></button></div>';
+    const btn = $("cap-open");
+    if (btn) btn.addEventListener("click", () => openArtifact(a));
+  }
+
   function renderRoomBar() {
     const rooms = S7.galleryView.rooms();
     const here = S7.galleryView.currentRoom();
@@ -372,7 +400,16 @@
 
     S7.shaftView.init($("c-shaft"));
     S7.digView.init($("c-dig"), onBrush);
-    S7.galleryView.init($("c-gallery"), openArtifact);
+    S7.galleryView.init($("c-gallery"), {
+      onOpen: openArtifact,
+      onSelect: showCaption,
+      onMove: (artifact, roomId, index) => {
+        S7.visitors.place(S, artifact, roomId, index);
+        S7.visitors.reseat(crowd);
+        G.log(S, "Rehung item " + artifact.no + " — " +
+                 (S7.cultures.byId[artifact.cultureId] || { name: "?" }).name + ".");
+      },
+    });
     crowd = S7.visitors.create(S.seed ^ 0x5bf03635);
 
     $("app").hidden = false;
@@ -399,6 +436,17 @@
     $("o-ok").addEventListener("click", () => show("m-offline", false));
     $("gal-prev").addEventListener("click", () => S7.galleryView.nudge(-1));
     $("gal-next").addEventListener("click", () => S7.galleryView.nudge(1));
+    $("gal-arrange").addEventListener("click", () => {
+      const on = !S7.galleryView.isArranging();
+      S7.galleryView.setArrange(on);
+      $("gal-arrange").classList.toggle("on", on);
+      $("gal-arrange").textContent = on ? "Done" : "Rehang";
+      if (on) showCaption(null);
+      $("gal-caption").innerHTML = on
+        ? '<p class="caphint">Drag any piece to move it along the wall, or through a ' +
+          'doorway into another room. Carry it to the edge to walk the building.</p>'
+        : '<p class="caphint">Click a piece to read its label. Double-click for the full record.</p>';
+    });
     $("btn-menu").addEventListener("click", openMenu);
     $("mn-close").addEventListener("click", () => show("m-menu", false));
     $("introbox").addEventListener("click", () => {
