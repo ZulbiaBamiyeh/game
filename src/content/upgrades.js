@@ -99,11 +99,8 @@
       unlock: () => true,
       eff: (S) => { S.mul.rating *= 1.06; } },
 
-    { id: "labels", name: "Wall labels", base: 28, mul: 1.26, max: 8,
-      desc: () => "Printed cards under every piece. +5% rating, people linger.",
-      flavour: "A hundred and twenty words, and no more.",
-      unlock: (S) => S.stats.accessioned >= 1,
-      eff: (S) => { S.mul.rating *= 1.05; S.mul.dwell *= 1.05; } },
+    /* "labels" retired — under-piece title plates cluttered the floor; click
+       a work for the caption. Old saves may still hold a level; recompute ignores it. */
 
     { id: "shop", name: "Gift shop", base: 90, mul: 1.28, max: 8,
       desc: (l) => (l === 0 ? "Opens a gift shop off the entrance." : "Stock the shop (lvl " + (l + 1) + ").") +

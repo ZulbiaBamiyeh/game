@@ -74,7 +74,7 @@
     return {
       lighting: u.lighting || 0,
       cases: u.cases || 0,
-      labels: u.labels || 0,
+      labels: 0,                         /* under-piece plates retired — click for caption */
       shop: u.shop || 0,
       staff: u.staff || u.guides || 0,
       guides: u.staff || u.guides || 0,
@@ -601,56 +601,193 @@
     rect(gx - 1, FLOOR_Y - 4, 3, 4, "#c79a42");
   }
 
-  /* Full gift shop room: shelves, postcard rack, till. Visitors come here to spend. */
+  /* Full gift shop room — a proper museum retail bay, not three brown shelves. */
   function drawGiftShop(r) {
-    const x0 = r.x, x1 = r.x + r.width;
+    const x0 = r.x, x1 = r.x + r.width, w = r.width;
     const lvl = r.shop || 1;
-    /* Warm retail paint — a little different from gallery walls */
-    ctx.globalAlpha = 0.12;
-    rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#6a4a28");
+    const kx = r.serviceX || (x0 + w * 0.55);
+
+    /* Cream retail paint over the gallery beige */
+    ctx.globalAlpha = 0.16;
+    rect(x0, WALL_TOP, w, FLOOR_Y - WALL_TOP, "#7a5a38");
+    ctx.globalAlpha = 0.08;
+    rect(x0, WALL_TOP, w, 28, "#c4a86a");
     ctx.globalAlpha = 1;
-    /* Sign */
-    rect(x0 + r.width / 2 - 40, 40, 80, 16, "#2a2418");
-    rect(x0 + r.width / 2 - 40, 40, 80, 1, "#c79a42");
-    rect(x0 + r.width / 2 - 32, 46, 48, 2, "#e8c66a");
-    rect(x0 + r.width / 2 - 28, 50, 36, 2, "#8a6a2c");
-    /* Wall shelves of stock — denser at higher shop level */
-    for (let row = 0; row < 3; row++) {
-      const y = 62 + row * 14;
-      rect(x0 + 14, y, r.width - 50, 2, "#4a3f28");
-      const n = 6 + Math.min(6, lvl);
-      for (let i = 0; i < n; i++) {
-        const px = x0 + 18 + i * 14;
-        if (px > x1 - 40) break;
-        rect(px, y - 10, 6, 10, i % 3 === 0 ? "#b5904a" : i % 3 === 1 ? "#6b5a8a" : "#4a6b45");
-        rect(px + 1, y - 9, 2, 3, "#e8e1d1");
-        if (lvl >= 3 && i % 2 === 0) rect(px + 3, y - 8, 2, 2, "#c79a42");
+
+    /* Runner carpet down the aisle */
+    const runW = Math.min(56, w - 40);
+    rect(x0 + (w - runW) / 2, FLOOR_Y + 2, runW, V.H - FLOOR_Y - 8, "#5a2830");
+    rect(x0 + (w - runW) / 2, FLOOR_Y + 2, runW, 1, "#7a3a42");
+    for (let y = FLOOR_Y + 10; y < V.H - 10; y += 6)
+      rect(x0 + (w - runW) / 2 + 2, y, runW - 4, 1, "#4a2028");
+
+    /* Hanging shop sign */
+    const sx0 = x0 + w / 2 - 36;
+    rect(sx0 + 8, 28, 2, 10, "#3a3426");
+    rect(sx0 + 62, 28, 2, 10, "#3a3426");
+    rect(sx0, 36, 72, 18, "#1a120c");
+    rect(sx0, 36, 72, 2, "#c79a42");
+    rect(sx0, 52, 72, 1, "#5a4a30");
+    rect(sx0 + 2, 38, 68, 12, "#2a1c12");
+    /* crisp "GIFT SHOP" over the pixel board */
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "600 10px " + FONT_UI;
+    fillTextShadow("GIFT SHOP", sx(x0 + w / 2), syR(45), "#e8c66a", "#00000088");
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    /* Pendant lamps with warm pools */
+    for (const lx of [x0 + 40, x0 + w / 2, x1 - 48]) {
+      if (lx < x0 + 20 || lx > x1 - 16) continue;
+      rect(lx - 1, 30, 2, 8, "#3a3426");
+      rect(lx - 5, 38, 10, 4, "#4a3f28");
+      rect(lx - 4, 41, 8, 2, "#ffe6ad");
+      const g = ctx.createRadialGradient(sx(lx), syR(70), 2, sx(lx), syR(70), 36);
+      g.addColorStop(0, "rgba(255,220,150,0.14)");
+      g.addColorStop(1, "rgba(255,220,150,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(sx(lx) - 40, syR(50), 80, 60);
+    }
+
+    /* Framed poster prints on the back wall */
+    const posters = [
+      { c: "#4a6b8a", a: "#c4d0e0" },
+      { c: "#6b4a3a", a: "#d4b896" },
+      { c: "#3a5a3a", a: "#a8c4a0" },
+    ];
+    for (let i = 0; i < Math.min(3, 1 + lvl); i++) {
+      const px = x0 + 20 + i * 28;
+      if (px > kx - 50) break;
+      const p = posters[i % posters.length];
+      rect(px, 48, 22, 28, "#2a2418");
+      rect(px + 1, 49, 20, 26, p.c);
+      rect(px + 3, 52, 14, 10, p.a);
+      rect(px + 4, 64, 12, 2, "#e8e1d188");
+      rect(px + 5, 68, 10, 2, "#e8e1d166");
+    }
+
+    /* Tall bookcase on the left — spines + boxes */
+    const shelfX = x0 + 12;
+    const shelfW = 38;
+    rect(shelfX, 56, shelfW, FLOOR_Y - 56, "#3a3020");
+    rect(shelfX, 56, shelfW, 2, "#5a4a30");
+    rect(shelfX + shelfW - 2, 58, 2, FLOOR_Y - 58, "#2a2418");
+    const spineCols = ["#6b3a2a", "#2a4a6b", "#4a6b3a", "#6b5a2a", "#4a3a5a", "#8a4a3a", "#3a5a5a"];
+    for (let row = 0; row < 4; row++) {
+      const y = 68 + row * 11;
+      rect(shelfX + 2, y, shelfW - 4, 2, "#4a3f28");
+      let bx = shelfX + 3;
+      for (let i = 0; i < 7; i++) {
+        const bw = 3 + (i + row + lvl) % 3;
+        if (bx + bw > shelfX + shelfW - 3) break;
+        rect(bx, y - 8, bw, 8, spineCols[(i + row * 3) % spineCols.length]);
+        if (i % 3 === 0) rect(bx, y - 7, bw, 1, "#e8e1d144");
+        bx += bw + 1;
       }
     }
-    /* Postcard spinner */
-    rect(x0 + 22, 110, 16, 22, "#3a3426");
-    for (let i = 0; i < 4; i++) rect(x0 + 24, 112 + i * 4, 12, 3, i % 2 ? "#c79a42" : "#8f8a7a");
-    /* Soft-toy bin / kids corner once the shop is stocked */
+    /* Mug shelf under the books */
+    rect(shelfX + 4, FLOOR_Y - 14, 8, 8, "#e8e1d1");
+    rect(shelfX + 5, FLOOR_Y - 16, 6, 3, "#e8e1d1");
+    rect(shelfX + 14, FLOOR_Y - 14, 8, 8, "#c79a42");
+    rect(shelfX + 15, FLOOR_Y - 16, 6, 3, "#c79a42");
     if (lvl >= 2) {
-      rect(x0 + 44, 120, 18, 16, "#4a3f28");
-      rect(x0 + 46, 122, 6, 6, "#c79a42");
-      rect(x0 + 54, 124, 5, 5, "#6b5a8a");
+      rect(shelfX + 24, FLOOR_Y - 12, 10, 6, "#6b5a8a");
+      rect(shelfX + 25, FLOOR_Y - 11, 8, 2, "#e8e1d1");
     }
-    /* Counter + till */
-    const kx = r.serviceX || (x0 + r.width * 0.55);
-    rect(kx - 28, 100, 56, 5, "#6d5b3c");
-    rect(kx - 28, 100, 56, 2, "#87724a");
-    rect(kx - 26, 105, 52, 22, "#4f4229");
-    rect(kx + 8, 92, 12, 8, "#2a2a33");
-    rect(kx + 10, 94, 8, 3, "#4e9d4e");
-    rect(kx - 18, 94, 10, 6, "#3a3426");
-    for (let i = 0; i < 3; i++) rect(kx - 16 + i * 3, 95, 2, 4, "#e8e1d1");
-    /* Paper bags stacked by the till */
-    rect(kx - 24, 118, 8, 10, "#c4a86a");
-    rect(kx - 22, 120, 4, 6, "#a8884a");
-    /* Cashier behind the till */
-    if (fac && (fac.staff > 0 || true)) drawStaffAt(kx + 4, FLOOR_Y + 16, "shop");
-    drawPlant(x1 - 22);
+
+    /* Right-hand display cabinet with glass doors */
+    const cabX = x1 - 44;
+    rect(cabX, 52, 32, FLOOR_Y - 52, "#3a3020");
+    rect(cabX, 52, 32, 2, "#5a4a30");
+    ctx.globalAlpha = 0.18;
+    rect(cabX + 2, 56, 28, FLOOR_Y - 60, "#9dc0cd");
+    ctx.globalAlpha = 1;
+    rect(cabX + 15, 56, 1, FLOOR_Y - 60, "#5a4e35");
+    rect(cabX + 2, 56, 1, FLOOR_Y - 60, "#6a5c42");
+    rect(cabX + 29, 56, 1, FLOOR_Y - 60, "#6a5c42");
+    /* Stock inside the glass */
+    for (let row = 0; row < 3; row++) {
+      const y = 66 + row * 14;
+      rect(cabX + 4, y, 10, 8, row % 2 ? "#b5904a" : "#6b5a8a");
+      rect(cabX + 16, y, 10, 8, row % 2 ? "#4a6b45" : "#c79a42");
+      rect(cabX + 5, y + 1, 3, 2, "#e8e1d1");
+      rect(cabX + 17, y + 1, 3, 2, "#e8e1d1");
+    }
+
+    /* Postcard spinner — proper carousel, not a brown block */
+    const spinX = x0 + 58;
+    rect(spinX + 6, 100, 3, 28, "#3a3426");
+    rect(spinX + 4, 126, 7, 3, "#2a2418");
+    for (let a = 0; a < 6; a++) {
+      const ox = ((a % 3) - 1) * 5;
+      const oy = Math.floor(a / 3) * 10;
+      rect(spinX + 2 + ox, 102 + oy, 10, 8, a % 2 ? "#d4c4a0" : "#e8e1d1");
+      rect(spinX + 3 + ox, 103 + oy, 8, 5, a % 3 === 0 ? "#6b8aaa" : a % 3 === 1 ? "#8a6a4a" : "#5a7a5a");
+    }
+    rect(spinX + 5, 98, 5, 3, "#c79a42");
+
+    /* Soft-toy / kids bin once stocked */
+    if (lvl >= 2) {
+      const bx = spinX + 22;
+      rect(bx, 118, 20, 14, "#4a3f28");
+      rect(bx, 118, 20, 2, "#6b5a3a");
+      rect(bx + 2, 112, 7, 8, "#c79a42");
+      rect(bx + 3, 111, 2, 2, "#2a2418");
+      rect(bx + 6, 111, 2, 2, "#2a2418");
+      rect(bx + 10, 114, 6, 6, "#6b5a8a");
+      rect(bx + 11, 113, 2, 2, "#2a2418");
+      if (lvl >= 4) rect(bx + 14, 116, 5, 5, "#4a6b45");
+    }
+
+    /* Centre island table — folded scarves / guidebooks */
+    if (w > 160) {
+      const ix = x0 + w * 0.38;
+      rect(ix - 18, 118, 36, 4, "#6d5b3c");
+      rect(ix - 18, 118, 36, 1, "#87724a");
+      rect(ix - 16, 122, 4, 10, "#4a3f28");
+      rect(ix + 12, 122, 4, 10, "#4a3f28");
+      rect(ix - 14, 112, 12, 6, "#6b3a4a");
+      rect(ix - 12, 110, 10, 3, "#8a4a5a");
+      rect(ix + 2, 114, 10, 4, "#3a5a6b");
+      rect(ix + 4, 112, 8, 3, "#4a6a7b");
+      if (lvl >= 3) {
+        rect(ix - 6, 108, 8, 10, "#e8e1d1");
+        rect(ix - 5, 109, 6, 4, "#6b4a3a");
+      }
+    }
+
+    /* Sales counter with glass top case of jewellery / pins */
+    rect(kx - 32, 98, 64, 5, "#6d5b3c");
+    rect(kx - 32, 98, 64, 2, "#87724a");
+    rect(kx - 30, 103, 60, 24, "#4f4229");
+    rect(kx - 30, 103, 60, 1, "#2f2718");
+    /* glass jewellery case on the counter */
+    rect(kx - 28, 88, 30, 10, "#2a2418");
+    ctx.globalAlpha = 0.22;
+    rect(kx - 27, 89, 28, 8, "#9dc0cd");
+    ctx.globalAlpha = 1;
+    rect(kx - 25, 91, 4, 3, "#c79a42");
+    rect(kx - 18, 92, 3, 2, "#e8e1d1");
+    rect(kx - 12, 91, 4, 3, "#8a6a2c");
+    rect(kx - 26, 88, 26, 1, "#6a5c42");
+    /* till */
+    rect(kx + 8, 90, 14, 8, "#2a2a33");
+    rect(kx + 10, 92, 10, 3, "#4e9d4e");
+    rect(kx + 11, 91, 3, 1, "#6ece6e");
+    /* guidebooks by the till */
+    for (let i = 0; i < 3; i++)
+      rect(kx + 4 + i * 3, 94, 2, 5, i % 2 ? "#6b3a2a" : "#2a4a6b");
+    /* paper bags */
+    rect(kx - 30, 120, 9, 11, "#c4a86a");
+    rect(kx - 28, 122, 5, 7, "#a8884a");
+    rect(kx - 20, 122, 8, 10, "#c4a86a");
+    if (lvl >= 3) rect(kx - 12, 124, 7, 8, "#d4b87a");
+
+    /* Cashier */
+    drawStaffAt(kx + 4, FLOOR_Y + 16, "shop");
+    drawPlant(x1 - 18);
+    if (lvl >= 3) drawPlant(x0 + 48);
   }
 
   function drawCafe(r) {
@@ -1127,9 +1264,8 @@
   }
 
   /* ---------- labels & HUD text (crisp, unscaled) -------------------------------
-     We do not stamp accession numbers under every piece — they clutter the
-     floor and sit on people. Click a work for the caption; "Wall labels"
-     upgrade adds a short title plate under each mount (name only). */
+     No under-piece title plates — they clutter the floor. Click a work for the
+     caption card. Room plaques and boards still use crisp text over pixel art. */
 
   const FONT_UI = 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
   const FONT_MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
@@ -1141,29 +1277,6 @@
     }
     ctx.fillStyle = fill;
     ctx.fillText(text, x, y);
-  }
-
-  function drawLabel(e) {
-    const labels = fac ? fac.labels : 0;
-    /* No under-piece chrome until the labels upgrade is bought. */
-    if (labels <= 0) return;
-    const b = exhibitBox(e);
-    const x = sx(e.x);
-    const y = e.mount === "wall" ? sy(b.y + b.h) + 14 : sy((b.base || 0) + FLOOR_Y + 7);
-    if (x < -80 || x > CW + 80) return;
-    const title = e.a.name.length > 22 ? e.a.name.slice(0, 20) + "…" : e.a.name;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "600 11px " + FONT_UI;
-    const tw = Math.ceil(ctx.measureText(title).width + 14);
-    const th = 16;
-    ctx.fillStyle = "#0f0d08f0";
-    ctx.fillRect(x - tw / 2, y - th / 2, tw, th);
-    ctx.fillStyle = "#c79a42";
-    ctx.fillRect(x - tw / 2, y - th / 2, tw, 1);
-    fillTextShadow(title, x, y + 1, "#e8e1d1", null);
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
   }
 
   /* Room name over the doorway — a real wall plaque, not floating type. */
@@ -1445,7 +1558,7 @@
     for (const e of L.exhibits) {
       const base = V.floorBase(e.floor || 0);
       const ey = base + (e.mount === "wall" ? 40 : FLOOR_Y + 8);
-      items.push({ y: ey, fn: () => { drawExhibit(e, S); drawLabel(e); } });
+      items.push({ y: ey, fn: () => { drawExhibit(e, S); } });
     }
     for (const bn of L.benches) {
       const base = V.floorBase(bn.floor || (bn.room && bn.room.floor) || 0);
