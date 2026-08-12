@@ -260,21 +260,39 @@
 
   /* Where an exhibit's artwork sits, in world pixels — driven by the object's
      own physical size, so a bead occupies a small case at eye level and a
-     colossal head runs from the floor almost to the ceiling. */
+     colossal head runs from the floor almost to the ceiling.
+     Art is always clamped under the ceiling moulding: without that, tall
+     case glass starts above WALL_TOP and reads as "hanging from the roof",
+     especially on the basement where the void above is visible. */
   function exhibitBox(e) {
     const h = e.h, w = Math.round(h * 0.95);
-    const base = V.floorBase(e.floor !== undefined ? e.floor : ((e.room && e.room.floor) || 0));
+    const fl = e.floor !== undefined ? e.floor : ((e.room && e.room.floor) || 0);
+    const base = V.floorBase(fl);
+    /* Lowest local Y the glass top / art may reach (below picture rail). */
+    const ceil = WALL_TOP + 8;
     if (e.mount === "wall") {
       const bottom = h <= 50 ? 96 : FLOOR_Y - 4;
-      const top = Math.max(18, bottom - h);
+      const top = Math.max(ceil, bottom - h);
       return { x: e.x - w / 2, y: base + top, w, h: bottom - top, base };
     }
     if (e.mount === "plinth") {
-      const plinthTop = Math.max(FLOOR_Y - 48, Math.min(FLOOR_Y - 4, Math.round(74 + h / 2)));
-      return { x: e.x - w / 2, y: base + plinthTop - h, w, h, plinthTop: base + plinthTop, base };
+      /* Plinth cap sits in the lower half of the wall; tall pieces sit on a
+         lower cap so the head never punches through the ceiling. */
+      let plinthTop = Math.max(FLOOR_Y - 48, Math.min(FLOOR_Y - 4, Math.round(74 + h / 2)));
+      if (plinthTop - h < ceil) plinthTop = Math.min(FLOOR_Y - 4, ceil + h);
+      const artTop = Math.max(ceil, plinthTop - h);
+      return {
+        x: e.x - w / 2, y: base + artTop, w, h: plinthTop - artTop,
+        plinthTop: base + plinthTop, base,
+      };
     }
-    const bottom = 92;                       /* case */
-    return { x: e.x - w / 2, y: base + bottom - h, w, h, caseBottom: base + bottom, base };
+    /* Case: shelf line fixed near eye level; art + glass clamped under ceil. */
+    const bottom = 92;
+    const artTop = Math.max(ceil, bottom - h);
+    return {
+      x: e.x - w / 2, y: base + artTop, w, h: bottom - artTop,
+      caseBottom: base + bottom, base,
+    };
   }
 
   /* ---------- world drawing --------------------------------------------------- */
@@ -494,11 +512,19 @@
     if (r.shop) { drawGiftShop(r); roomLocal = false; return; }
     if (r.cafe) { drawCafe(r); roomLocal = false; return; }
     if (r.researchRoom) { drawResearchRoom(r); roomLocal = false; return; }
-    if (r.deepgal) { drawDeepGallery(r); roomLocal = false; return; }
     if (r.wing) { drawWingRoom(r); roomLocal = false; return; }
+    /* Empty deep gallery only — rooms with finds fall through to normal hang. */
+    if (r.deepgal && (!r.exhibits || !r.exhibits.length)) {
+      drawDeepGallery(r); roomLocal = false; return;
+    }
 
     /* Gallery rooms: carpet, architecture, then wall board. */
     drawCarpet(x0, r.width);
+    if (r.deepgal) {
+      ctx.globalAlpha = 0.22;
+      rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#0a1018");
+      ctx.globalAlpha = 1;
+    }
     if (r.decor) for (const d of r.decor) drawDecor(d, r);
     if (roomHasBoard(r)) drawInfoBoard(r);
 
@@ -723,23 +749,29 @@
 
   function drawDeepGallery(r) {
     const x0 = r.x, x1 = r.x + r.width;
-    /* low light, thick glass cases waiting for the deep material */
-    ctx.globalAlpha = 0.35;
+    /* Low light wash — real exhibits are drawn later in the furniture pass. */
+    ctx.globalAlpha = 0.28;
     rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#0a1018");
     ctx.globalAlpha = 1;
-    for (let i = 0; i < 3; i++) {
-      const cx = x0 + 50 + i * 55;
-      if (cx > x1 - 30) break;
-      rect(cx - 14, 70, 28, 42, "#1a1e24");
-      rect(cx - 14, 70, 28, 2, "#3a4a5a");
-      ctx.globalAlpha = 0.2;
-      rect(cx - 12, 74, 24, 34, "#6a90a8");
-      ctx.globalAlpha = 1;
-      rect(cx - 10, 80, 20, 18, "#12161c");
+    drawCarpet(x0, r.width);
+    /* Empty hall: short floor cases with pedestals (not roof-to-floor slabs). */
+    if (!r.exhibits || !r.exhibits.length) {
+      for (let i = 0; i < 3; i++) {
+        const cx = x0 + 50 + i * 55;
+        if (cx > x1 - 30) break;
+        const cBot = 92, cTop = 58, pedH = FLOOR_Y + 6 - cBot;
+        rect(cx - 12, cBot, 24, pedH, C.ped);
+        rect(cx - 12, cBot, 24, 2, C.pedTop);
+        rect(cx - 14, cTop, 28, cBot - cTop, "#1a1e24");
+        rect(cx - 14, cTop, 28, 2, "#3a4a5a");
+        ctx.globalAlpha = 0.18;
+        rect(cx - 12, cTop + 3, 24, cBot - cTop - 6, "#6a90a8");
+        ctx.globalAlpha = 1;
+        rect(cx - 10, cTop + 8, 20, 14, "#12161c");
+      }
     }
     rect(x0 + r.width / 2 - 40, 44, 80, 14, "#12161c");
     rect(x0 + r.width / 2 - 40, 44, 80, 1, "#4a6a8a");
-
   }
 
   function drawWingRoom(r) {

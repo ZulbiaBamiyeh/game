@@ -190,12 +190,32 @@ function serve() {
     if (!(S7.visitors.floorBase(1) < S7.visitors.floorBase(0)))
       return "upper not above ground";
     S.up.deepgal = 1;
+    /* Deep-time finds should hang in the basement once the deep gallery opens. */
+    for (let i = 0; i < 6; i++) {
+      const a = S7.artifacts.makeArtifact(9000 + i, 520 + i * 20);
+      a.no = "D" + i; a.display = true; S.collection.push(a);
+    }
     S7.visitors.invalidate();
     const L2 = S7.visitors.getLayout(S);
-    if (!L2.rooms.some((r) => r.deepgal && r.floor === -1))
-      return "deep gallery not in basement";
+    if (!L2.rooms.some((r) => r.floor === -1 && !r.stairs))
+      return "no basement gallery room";
     if (!(S7.visitors.floorBase(-1) > S7.visitors.floorBase(0)))
       return "basement not below ground";
+    const basEx = L2.exhibits.filter((e) => e.floor === -1);
+    if (!basEx.length) return "no basement exhibits";
+    /* Case furniture must sit under the ceiling, not stretch from the roof. */
+    const FLOOR_Y = S7.visitors.FLOOR_Y;
+    const base = S7.visitors.floorBase(-1);
+    for (const e of basEx) {
+      if (e.mount === "wall") continue;
+      const h = e.h || 20;
+      const cBot = base + 92;
+      const ceil = base + 14 + 8;
+      const artTop = Math.max(ceil, cBot - h);
+      if (artTop < base + 14) return "basement case above ceiling";
+      const pedH = (base + FLOOR_Y + 8) - cBot;
+      if (pedH < 4) return "basement pedestal inverted";
+    }
     if (typeof S7.galleryView.goToFloor !== "function") return "no goToFloor";
     S7.galleryView.goToFloor(1);
     S7.galleryView.goToFloor(0);

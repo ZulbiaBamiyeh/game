@@ -64,7 +64,7 @@
     }];
     const room = Object.assign({
       era: { id, name, period, short: name },
-      x, width, floor: floor || 0, exhibits: [], items: [], benches, amenity: id,
+      x, width, floor: floor != null ? floor : 0, exhibits: [], items: [], benches, amenity: id,
     }, extra || {});
     /* Service points visitors walk to: shop till, café counter, tables. */
     if (id === "shop" || room.shop) {
@@ -150,7 +150,7 @@
     if (width > 280) decor.push({ kind: "plant", x: x + 36 });
 
     rooms.push({
-      era, x, width, floor: floor || 0, exhibits, items, benches, decor,
+      era, x, width, floor: floor != null ? floor : 0, exhibits, items, benches, decor,
       theme: meta.theme || null,
       featured: !!meta.theme,
     });
@@ -269,10 +269,25 @@
       }
     }
 
-    /* Split galleries across floors when the upper storey exists. */
-    const split = hasUpper ? Math.ceil(galleryBuckets.length * 0.55) : galleryBuckets.length;
-    const groundGals = galleryBuckets.slice(0, split);
-    const upperGals = galleryBuckets.slice(split);
+    /* Deep gallery (basement): themed deep-time halls leave the ground stack
+       so the basement has real cases, not only an empty amenity shell. */
+    const hasBasement = deepLvl > 0;
+    const isDeepBucket = (b) => {
+      const t = b.meta && b.meta.theme;
+      if (t === "dino" || t === "fossil" || t === "mineral") return true;
+      const id = b.meta && b.meta.id;
+      return id === "dinosaurs" || id === "fossils" || id === "minerals" ||
+             id === "mesozoic" || id === "unattr" || id === "floor";
+    };
+    const deepGals = hasBasement ? galleryBuckets.filter(isDeepBucket) : [];
+    const restGals = hasBasement
+      ? galleryBuckets.filter((b) => !isDeepBucket(b))
+      : galleryBuckets;
+
+    /* Split remaining galleries across floors when the upper storey exists. */
+    const split = hasUpper ? Math.ceil(restGals.length * 0.55) : restGals.length;
+    const groundGals = restGals.slice(0, split);
+    const upperGals = restGals.slice(split);
 
     for (const b of groundGals)
       pushGalleryRoom(rooms, ground, b.meta, b.items, 0, roomPad);
@@ -286,7 +301,6 @@
     }
 
     /* Basement stair — deep gallery lives below ground, not above. */
-    const hasBasement = deepLvl > 0;
     let stairsDownX = ground.x;
     if (hasBasement) {
       rooms.push(makeStairs(ground.x, 0, -1));
@@ -323,10 +337,19 @@
       const bas = { x: stairsDownX };
       rooms.push(makeStairs(bas.x, -1, 0));
       bas.x += STAIRS_W + DOOR;
-      const dw = 220 + Math.min(6, deepLvl) * 14;
-      rooms.push(amenityRoom("deepgal", "The deep gallery", "low light · thick glass", dw, bas.x, -1, {
-        deepgal: deepLvl,
-      }));
+      if (deepGals.length) {
+        for (const b of deepGals) {
+          pushGalleryRoom(rooms, bas, b.meta, b.items, -1, roomPad + deepLvl * 4);
+          const last = rooms[rooms.length - 1];
+          last.deepgal = deepLvl;
+        }
+      } else {
+        /* No deep finds on show yet — keep an empty hall with placeholder cases. */
+        const dw = 220 + Math.min(6, deepLvl) * 14;
+        rooms.push(amenityRoom("deepgal", "The deep gallery", "low light · thick glass", dw, bas.x, -1, {
+          deepgal: deepLvl,
+        }));
+      }
     }
 
     if (!rooms.length) {
@@ -345,8 +368,16 @@
       maxFloor = Math.max(maxFloor, r.floor || 0);
       minFloor = Math.min(minFloor, r.floor || 0);
       if (r.stairs) stairs.push(r);
-      for (const e of r.exhibits) { e.room = r; e.floor = r.floor || 0; exhibits.push(e); }
-      for (const b of r.benches) { b.room = r; b.floor = r.floor || 0; benches.push(b); }
+      for (const e of r.exhibits) {
+        e.room = r;
+        e.floor = r.floor != null ? r.floor : 0;
+        exhibits.push(e);
+      }
+      for (const b of r.benches) {
+        b.room = r;
+        b.floor = r.floor != null ? r.floor : 0;
+        benches.push(b);
+      }
     }
     /* World Y: upper floors negative (above), basement positive (below). */
     const yMin = floorBase(maxFloor);
