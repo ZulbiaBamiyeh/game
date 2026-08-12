@@ -22,6 +22,17 @@
       understanding: 0,
       sites: 1,               /* Site 7 is the first. Others follow. */
 
+      /* The museum clock. One museum minute is one real second while the doors
+         are open; the night runs at 16x so you are not waiting for morning. */
+      day: 1,
+      minute: 9 * 60 - 12,    /* just before opening on day one */
+      admission: 4,           /* what it costs to get in */
+      arrivalAcc: 0,          /* fractional arrivals carried between ticks */
+      pendingArrivals: 0,     /* admitted but not yet drawn walking in */
+      today: { visitors: 0, gate: 0, extra: 0 },
+      yesterday: null,
+      history: [],            /* last 14 days, for the takings strip */
+
       up: {},                 /* upgrade id -> level */
       research: {},           /* research id -> true */
 
@@ -60,6 +71,7 @@
       stats: {
         finds: 0, accessioned: 0, visitorsTotal: 0, earned: 0,
         deepFinds: 0, playtime: 0, correct: 0, filed: 0,
+        gateTotal: 0, bestDay: 0,
       },
       milestones: {},
       log: [],

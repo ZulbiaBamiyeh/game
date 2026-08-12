@@ -43,6 +43,8 @@
       v: S7.state.VERSION,
       seed: S.seed, started: S.started, intro: S.intro,
       depth: S.depth, funds: S.funds, understanding: S.understanding, sites: S.sites,
+      day: S.day, minute: S.minute, admission: S.admission,
+      today: S.today, yesterday: S.yesterday, history: S.history,
       up: S.up, research: S.research,
       stamina: S.stamina, stamTimer: S.stamTimer,
       collection: S.collection.map(packArtifact),
@@ -62,6 +64,12 @@
     S.funds = raw.funds || 0;
     S.understanding = raw.understanding || 0;
     S.sites = raw.sites || 1;
+    S.day = raw.day || 1;
+    S.minute = raw.minute === undefined ? 9 * 60 - 12 : raw.minute;
+    S.admission = raw.admission === undefined ? 4 : raw.admission;
+    if (raw.today) S.today = raw.today;
+    S.yesterday = raw.yesterday || null;
+    S.history = raw.history || [];
     Object.assign(S.up, raw.up || {});
     S.research = raw.research || {};
     S.collection = (raw.collection || []).map(unpackArtifact);

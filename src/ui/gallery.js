@@ -38,9 +38,12 @@
 
   const C = {
     voidbg: "#0a0806",
-    wallHi: "#3b3423", wallLo: "#2a2417", wallShade: "#221d13",
+    wallTop: "#463d29", wallHi: "#3b3423", wallLo: "#2a2417", wallShade: "#221d13",
+    wallSeam: "#231e14", wallSeamLit: "#443b28",
+    ceil: "#100d08", ceilShade: "#171208", cove: "#3a3225", coveLit: "#544a35",
+    floorFar: "#282116",
     rail: "#4c412a", dado: "#453a26",
-    floorHi: "#3a3021", floorLo: "#2b2418", floorLine: "#241e14",
+    floorHi: "#453a27", floorLo: "#33291b", floorLine: "#241e14",
     skirt: "#4a3f29",
     plinth: "#5a4e35", plinthTop: "#6d5f42", plinthShade: "#3d3423",
     caseGlass: "#9dc0cd", caseFrame: "#2e2a22", caseEdge: "#4f4736",
@@ -203,52 +206,180 @@
     ctx.fillRect(sx(wx), sy(wy), Math.round(w * SCALE), Math.round(h * SCALE));
   };
 
+  /* ---------- the room ------------------------------------------------------
+     Three surfaces and a light source. Everything else is furniture. */
+
+  /* Parquet: bands that compress toward the back wall, with plank ends
+     staggered row to row so the eye reads a floor rather than a gradient. */
+  function drawFloor(x0, w) {
+    for (let y = FLOOR_Y; y < V.H; y++) {
+      const t = (y - FLOOR_Y) / (V.H - FLOOR_Y);
+      rect(x0, y, w, 1, t < 0.18 ? C.floorFar : t < 0.55 ? C.floorLo : C.floorHi);
+    }
+    /* board rows, squeezed together toward the back wall */
+    const rows = [];
+    ctx.globalAlpha = 0.5;
+    for (let i = 0; i < 8; i++) {
+      const y = FLOOR_Y + 2 + i * i * 1.35;
+      if (y > V.H) break;
+      rows.push(y);
+      rect(x0, y, w, 1, C.floorLine);
+    }
+    ctx.globalAlpha = 1;
+    /* plank ends only on the two nearest boards, where you would actually
+       pick them out */
+    ctx.globalAlpha = 0.4;
+    for (let i = Math.max(0, rows.length - 3); i < rows.length - 1; i++) {
+      const y = rows[i], next = rows[i + 1];
+      const pitch = 20 + i * 8;
+      for (let px = Math.floor((x0 + (i % 2) * pitch / 2) / pitch) * pitch; px < x0 + w; px += pitch) {
+        if (px < x0) continue;
+        rect(px, y + 1, 1, Math.max(1, next - y - 1), C.floorLine);
+      }
+    }
+    ctx.globalAlpha = 1;
+    /* a soft sheen down the middle of the floor, as if from the lights */
+    const g = ctx.createLinearGradient(0, sy(FLOOR_Y), 0, sy(V.H));
+    g.addColorStop(0, "rgba(255,226,166,0.07)");
+    g.addColorStop(1, "rgba(255,226,166,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(sx(x0), sy(FLOOR_Y), Math.round(w * SCALE), Math.round((V.H - FLOOR_Y) * SCALE));
+  }
+
+  /* Wall: a vertical wash, panel joins, and the picture rail. */
+  function drawWall(x0, w) {
+    for (let y = WALL_TOP; y < FLOOR_Y; y++) {
+      const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
+      /* brightest just under the lights, falling away to the skirting */
+      const shade = t < 0.16 ? C.wallTop : t < 0.46 ? C.wallHi : t < 0.82 ? C.wallLo : C.wallShade;
+      rect(x0, y, w, 1, shade);
+    }
+    /* panel joins, kept faint — at full contrast the wall reads as bathroom
+       tiling rather than a painted gallery */
+    ctx.globalAlpha = 0.35;
+    for (let px = Math.ceil(x0 / 58) * 58; px < x0 + w; px += 58)
+      rect(px, WALL_TOP, 1, FLOOR_Y - WALL_TOP - 5, C.wallSeam);
+    ctx.globalAlpha = 1;
+    rect(x0, RAIL_Y, w, 1, C.rail);
+    rect(x0, RAIL_Y + 1, w, 1, "#00000038");
+    rect(x0, FLOOR_Y - 5, w, 5, C.skirt);
+    rect(x0, FLOOR_Y - 5, w, 1, "#75643f");
+    rect(x0, FLOOR_Y - 1, w, 1, "#2a2317");
+  }
+
+  /* Coved ceiling with recessed downlights. */
+  function drawCeiling(x0, w) {
+    rect(x0, 0, w, WALL_TOP - 8, C.ceil);
+    rect(x0, WALL_TOP - 8, w, 4, C.cove);
+    rect(x0, WALL_TOP - 8, w, 1, C.coveLit);
+    rect(x0, WALL_TOP - 4, w, 4, C.ceilShade);
+    for (let lx = Math.ceil(x0 / 46) * 46; lx < x0 + w; lx += 46) {
+      rect(lx - 3, WALL_TOP - 4, 7, 3, "#3a332a");
+      rect(lx - 2, WALL_TOP - 2, 5, 1, "#ffe6ad");
+      /* the glow the fitting throws on the ceiling around it */
+      const g = ctx.createRadialGradient(sx(lx), sy(WALL_TOP - 2), 1, sx(lx), sy(WALL_TOP - 2), 30);
+      g.addColorStop(0, "rgba(255,226,166,0.16)");
+      g.addColorStop(1, "rgba(255,226,166,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(sx(lx) - 32, sy(0), 64, sy(WALL_TOP + 10));
+    }
+  }
+
+  /* A potted plant, because every gallery has one in the corner. */
+  function drawPlant(px) {
+    rect(px - 5, 118, 10, 12, "#5a4230");
+    rect(px - 5, 118, 10, 2, "#6f5340");
+    rect(px + 2, 120, 3, 10, "#3f2e21");
+    for (let i = 0; i < 7; i++) {
+      const a = -1.9 + i * 0.42;
+      const len = 10 + (i % 3) * 4;
+      const ex = px + Math.cos(a) * len, ey = 116 + Math.sin(a) * len;
+      ctx.strokeStyle = i % 2 ? "#3d6b45" : "#4f7f52";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx(px), sy(117));
+      ctx.quadraticCurveTo(sx(px + Math.cos(a) * len * 0.5), sy(112 + Math.sin(a) * len * 0.4), sx(ex), sy(ey));
+      ctx.stroke();
+    }
+  }
+
   function drawRoom(r) {
     const x0 = r.x, x1 = r.x + r.width;
     if (x1 < cam - 40 || x0 > cam + VIEW + 40) return;
 
-    /* wall, lit from the ceiling track downward */
-    for (let y = WALL_TOP; y < FLOOR_Y; y++) {
-      const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
-      const shade = t < 0.5 ? C.wallHi : t < 0.85 ? C.wallLo : C.wallShade;
-      rect(x0, y, r.width, 1, shade);
-    }
-    /* the picture rail is the one horizontal that makes it read as a room */
-    rect(x0, RAIL_Y, r.width, 1, C.rail);
-    rect(x0, RAIL_Y + 1, r.width, 1, "#00000033");
-    /* skirting */
-    rect(x0, FLOOR_Y - 4, r.width, 4, C.skirt);
-    rect(x0, FLOOR_Y - 4, r.width, 1, "#6b5c3d");
+    drawWall(x0, r.width);
+    drawFloor(x0, r.width);
+    drawCeiling(x0, r.width);
 
-    /* floor: receding bands, darker toward the back */
-    for (let y = FLOOR_Y; y < V.H; y++) {
-      const t = (y - FLOOR_Y) / (V.H - FLOOR_Y);
-      rect(x0, y, r.width, 1, t < 0.35 ? C.floorLo : C.floorHi);
-    }
-    /* board joins, spaced so they read as perspective without any maths */
-    for (let i = 0; i < 6; i++) {
-      const y = FLOOR_Y + 4 + i * i * 2.1;
-      if (y > V.H) break;
-      rect(x0, y, r.width, 1, C.floorLine);
-    }
+    if (r.foyer) { drawFoyer(r); return; }
 
-    /* interpretation panel: the block of wall text every gallery has, drawn
-       as texture rather than words */
-    const px0 = x0 + 14;
+    /* the block of wall text every gallery has, drawn as texture not words */
+    const px0 = x0 + 12;
     if (r.exhibits.length) {
-      rect(px0, 44, 24, 30, "#3f3726");
-      rect(px0, 44, 24, 1, "#5d5238");
-      rect(px0 + 2, 47, 20, 2, C.rail);
-      for (let i = 0; i < 7; i++) rect(px0 + 2, 52 + i * 3, 16 + (i % 3) * 4, 1, "#574c34");
+      rect(px0, 44, 26, 32, "#453c2a");
+      rect(px0, 44, 26, 1, "#665941");
+      rect(px0, 44, 1, 32, "#665941");
+      rect(px0 + 3, 47, 20, 2, C.rail);
+      for (let i = 0; i < 8; i++) rect(px0 + 3, 53 + i * 3, 14 + (i % 3) * 6, 1, "#5d5138");
     }
+    if (r.width > 260) drawPlant(x1 - 22);
+  }
 
-    /* ceiling lighting track */
-    rect(x0, WALL_TOP - 6, r.width, 6, "#191409");
-    rect(x0, WALL_TOP - 1, r.width, 1, "#0d0a06");
-    for (let lx = x0 + 24; lx < x1 - 8; lx += 48) {
-      rect(lx - 2, WALL_TOP - 5, 4, 4, "#4a4234");
-      rect(lx - 1, WALL_TOP - 1, 2, 1, "#ffd98a");
+  /* ---------- the entrance hall ---------------------------------------------
+     Street doors, daylight on the floor, and the desk where the money is
+     actually taken. */
+  function drawFoyer(r) {
+    const dx = r.doorX;
+
+    /* the doors: glass, with the street outside */
+    rect(dx - 17, 34, 34, FLOOR_Y - 34, "#8fa9b5");
+    rect(dx - 17, 34, 34, 3, "#4a4234");
+    rect(dx - 1, 36, 2, FLOOR_Y - 38, "#3e392c");
+    rect(dx - 17, 34, 1, FLOOR_Y - 34, "#4a4234");
+    rect(dx + 16, 34, 1, FLOOR_Y - 34, "#4a4234");
+    for (const gx of [dx - 15, dx + 3]) {
+      rect(gx, 38, 12, 30, "#a9c3cc");
+      rect(gx, 70, 12, FLOOR_Y - 72, "#93aab4");
+      rect(gx + 1, 39, 3, 28, "#c8dde3");        /* reflection */
     }
+    /* daylight spilling in across the floor */
+    const g = ctx.createLinearGradient(sx(dx), sy(FLOOR_Y), sx(dx + 52), sy(V.H));
+    g.addColorStop(0, "rgba(200,225,235,0.22)");
+    g.addColorStop(1, "rgba(200,225,235,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(sx(dx - 17), sy(FLOOR_Y));
+    ctx.lineTo(sx(dx + 17), sy(FLOOR_Y));
+    ctx.lineTo(sx(dx + 54), sy(V.H));
+    ctx.lineTo(sx(dx - 46), sy(V.H));
+    ctx.closePath();
+    ctx.fill();
+
+    /* the desk */
+    const kx = r.deskX, kw = r.deskW;
+    rect(kx - kw / 2, 96, kw, 6, "#6d5b3c");                 /* counter top */
+    rect(kx - kw / 2, 96, kw, 2, "#87724a");
+    rect(kx - kw / 2 + 2, 102, kw - 4, 26, "#4f4229");       /* front panel */
+    rect(kx - kw / 2 + 2, 102, kw - 4, 1, "#2f2718");
+    for (let i = 1; i < 4; i++) rect(kx - kw / 2 + 2 + i * (kw - 4) / 4, 104, 1, 22, "#3d3322");
+    /* till and a card reader */
+    rect(kx + 8, 89, 11, 7, "#2a2a33");
+    rect(kx + 10, 91, 7, 3, "#4e9d4e");
+    rect(kx - 15, 92, 5, 4, "#3a3a44");
+    /* leaflets */
+    for (let i = 0; i < 3; i++) rect(kx - 22 + i * 5, 92, 4, 4, i % 2 ? "#b5904a" : "#8f8a7a");
+
+    /* signage over the desk */
+    rect(kx - 30, 44, 60, 16, "#2a2418");
+    rect(kx - 30, 44, 60, 1, "#4c412a");
+    rect(kx - 25, 49, 34, 2, "#c79a42");
+    rect(kx - 25, 53, 24, 2, "#7d7461");
+
+    /* a rope line and a bin, because foyers are full of both */
+    rect(kx - 40, 132, 1, 8, C.rope);
+    rect(kx + 40, 132, 1, 8, C.rope);
+    rect(kx - 40, 133, 80, 1, C.rope);
+    drawPlant(r.width - 26);
   }
 
   function drawDoorway(x0) {
@@ -275,7 +406,7 @@
   /* A soft cone from the track, plus the pool it throws on the floor. */
   function spotlight(wx, top, bottom) {
     const pool = ctx.createRadialGradient(sx(wx), sy(FLOOR_Y + 14), 2, sx(wx), sy(FLOOR_Y + 14), 44);
-    pool.addColorStop(0, "rgba(255,222,150,0.10)");
+    pool.addColorStop(0, "rgba(255,226,166,0.13)");
     pool.addColorStop(1, "rgba(255,222,150,0)");
     ctx.fillStyle = pool;
     ctx.fillRect(sx(wx) - 46, sy(FLOOR_Y), 92, (V.H - FLOOR_Y) * SCALE);
@@ -284,7 +415,7 @@
 
   function cone(wx, top, bottom) {
     const g = ctx.createLinearGradient(0, sy(WALL_TOP), 0, sy(bottom));
-    g.addColorStop(0, "rgba(255,222,150,0.16)");
+    g.addColorStop(0, "rgba(255,222,150,0.09)");
     g.addColorStop(1, "rgba(255,222,150,0)");
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -299,6 +430,17 @@
   function artAt(e, b) {
     const px = Math.round(b.h * SCALE);
     return S7.artifacts.scaledFor(e.a, px);
+  }
+
+  /* Museum lighting: the thing in the light is brighter than the wall it hangs
+     on. Without this everything sits at the same value and the room goes flat. */
+  function lightArt(b, aw, ah) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.13;
+    ctx.fillStyle = "#ffe0a8";
+    ctx.fillRect(sx(b.x), sy(b.y), aw, ah);
+    ctx.restore();
   }
 
   function outlineBox(b, colour) {
@@ -320,6 +462,7 @@
       ctx.fillStyle = "#00000055";
       ctx.fillRect(sx(b.x) + 3, sy(b.y) + 4, aw, ah);
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
+      lightArt(b, aw, ah);
       if (ring) outlineBox(b, ring);
       if (b.y > RAIL_Y + 2) rect(e.x - 1, RAIL_Y, 1, b.y - RAIL_Y, "#5a4e35");
     } else if (e.mount === "plinth") {
@@ -329,6 +472,7 @@
       rect(e.x - pw / 2, b.plinthTop, pw, 2, C.plinthTop);
       rect(e.x + pw / 2 - 5, b.plinthTop + 2, 5, FLOOR_Y + 6 - b.plinthTop, C.plinthShade);
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
+      lightArt(b, aw, ah);
       if (ring) outlineBox(b, ring);
       const rw = Math.max(pw + 8, 26);
       rect(e.x - rw / 2, FLOOR_Y + 14, 1, 6, C.rope);
@@ -348,6 +492,7 @@
       rect(e.x - pw / 2, FLOOR_Y + 5, pw, 3, C.pedShade);
 
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
+      lightArt(b, aw, ah);
 
       ctx.globalAlpha = 0.14;
       rect(e.x - cw / 2, glassTop, cw, b.caseBottom - glassTop, C.caseGlass);
@@ -377,10 +522,11 @@
 
   function drawAgent(a) {
     const y = V.feetY(a);
-    if (a.x < cam - 20 || a.x > cam + VIEW + 20) return;
+    if (a.x < cam - 24 || a.x > cam + VIEW + 24) return;
     const s = a.sprite;
     const px = sx(a.x) - Math.round(s.w * PERSON / 2);
     const py = sy(y) - s.h * PERSON;
+    const now = performance.now() / 1000;
 
     /* contact shadow */
     ctx.fillStyle = C.shadow;
@@ -388,14 +534,24 @@
     ctx.ellipse(sx(a.x), sy(y), 13, 3.5, 0, 0, 6.283);
     ctx.fill();
 
-    let frame;
-    if (a.state === "sit") frame = s.sit;
-    else if (a.state === "view") frame = s.back;
-    else frame = s.frames[1 + (Math.floor(a.phase) % 4)];
+    let frame, flip = false;
+    if (a.state === "sit") {
+      frame = s.sit;
+    } else if (a.state === "pay") {
+      frame = s.stand;
+    } else if (a.state === "view") {
+      if (a.flash > 0) frame = s.photo;
+      else if (a.bubble) frame = Math.floor(now * 1.6 + a.id) % 2 ? s.point : s.back;
+      else frame = Math.floor(now * 0.7 + a.id * 0.37) % 2 ? s.backLean : s.back;
+    } else {
+      /* six-frame walk, stepping at a rate that matches how fast they move */
+      frame = s.walk[Math.floor(a.phase) % 6];
+      flip = a.dir < 0;
+    }
 
-    /* People further back sit in less light. */
-    ctx.globalAlpha = 0.82 + a.z * 0.18;
-    if (a.dir < 0 && a.state !== "view" && a.state !== "sit") {
+    /* People further back sit in less of the light. */
+    ctx.globalAlpha = 0.80 + a.z * 0.20;
+    if (flip) {
       ctx.save();
       ctx.translate(px + s.w * PERSON, py);
       ctx.scale(-1, 1);
@@ -407,11 +563,28 @@
     ctx.globalAlpha = 1;
 
     if (a.flash > 0) {
-      ctx.globalAlpha = Math.max(0, a.flash * 1.6);
+      ctx.globalAlpha = Math.max(0, a.flash * 1.4);
       ctx.fillStyle = "#fff8e0";
       ctx.fillRect(0, 0, CW, CH);
       ctx.globalAlpha = 1;
     }
+  }
+
+  /* The person behind the desk. Always there, never simulated. */
+  let deskStaff = null;
+  function drawDeskStaff(r) {
+    if (!deskStaff) deskStaff = S7.people.makePerson(20240607, "staff");
+    const x = r.deskX - 4;
+    if (x < cam - 30 || x > cam + VIEW + 30) return;
+    const s = deskStaff;
+    /* stood behind the counter, so only the top half shows */
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx(x) - 40, 0, 80, sy(97));
+    ctx.clip();
+    ctx.drawImage(s.stand, sx(x) - Math.round(s.w * PERSON / 2), sy(112) - s.h * PERSON,
+                  s.w * PERSON, s.h * PERSON);
+    ctx.restore();
   }
 
   /* ---------- overlay (crisp, unscaled) ---------------------------------------- */
@@ -478,6 +651,24 @@
     });
   }
 
+  /* The ticket price floating up off someone who has just paid. This is the
+     only place the player sees money arrive, and it should be visible. */
+  function drawPaidFloater(a) {
+    const p = a.paid;
+    const t = 1 - p.t / p.life;
+    const x = sx(a.x), yTop = sy(V.feetY(a)) - a.sprite.h * PERSON - 6 - t * 26;
+    if (x < -40 || x > CW + 40) return;
+    ctx.globalAlpha = Math.max(0, Math.min(1, (1 - t) * 1.6));
+    ctx.font = "600 12px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#0f0d08";
+    ctx.fillText("+" + S7.views.fmt(p.amount), x + 1, yTop + 1);
+    ctx.fillStyle = "#e8c66a";
+    ctx.fillText("+" + S7.views.fmt(p.amount), x, yTop);
+    ctx.textAlign = "left";
+    ctx.globalAlpha = 1;
+  }
+
   /* Bubbles claim space for the frame; later ones are pushed upward until they
      clear, so a pair in conversation stacks instead of overlapping the art. */
   let bubbleRects = [];
@@ -511,13 +702,13 @@
     let line = "";
     for (const w of words) {
       const t = line ? line + " " + w : w;
-      if (ctx.measureText(t).width > 150 && line) { lines.push(line); line = w; }
+      if (ctx.measureText(t).width > 128 && line) { lines.push(line); line = w; }
       else line = t;
     }
     if (line) lines.push(line);
 
     const wide = Math.max(...lines.map((l) => ctx.measureText(l).width));
-    const bw = wide + 14, bh = lines.length * 12 + 10;
+    const bw = Math.min(CW - 16, Math.ceil(wide) + 16), bh = lines.length * 12 + 10;
     const bx = Math.max(4, Math.min(CW - bw - 4, cx - bw / 2));
     const by = placeBubble(bx, Math.max(4, cy - bh), bw, bh);
 
@@ -572,6 +763,8 @@
       items.push({ y: e.mount === "wall" ? 0 : FLOOR_Y + 8, fn: () => drawExhibit(e, S) });
     for (const bn of L.benches)
       items.push({ y: V.BENCH_Y - 4, fn: () => drawBench(bn) });
+    for (const r of L.rooms)
+      if (r.foyer) items.push({ y: 96, fn: () => drawDeskStaff(r) });
     for (const a of crowd.agents)
       items.push({ y: V.feetY(a), fn: () => drawAgent(a) });
     items.sort((p, q) => p.y - q.y);
@@ -600,6 +793,7 @@
     /* overlay */
     for (const r of L.rooms) drawRoomPlaque(r);
     for (const e of L.exhibits) drawLabel(e);
+    for (const a of crowd.agents) if (a.paid) drawPaidFloater(a);
     if (selected && L.exhibits.indexOf(selected) >= 0) drawWallLabel(selected);
     bubbleRects = [];
     for (const a of crowd.agents) drawBubble(a);

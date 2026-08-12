@@ -298,17 +298,75 @@
     checkMilestones(S);
   }
 
+  /* ---------- the door -------------------------------------------------------
+     One visitor, through the entrance, ticket paid. This is the only place gate
+     money enters the game — there is no continuous income trickle any more. */
+
+  function admit(S, sv) {
+    const extra = S7.museum.secondarySpend(S, sv);
+    S.funds += S.admission + extra;
+    S.today.visitors += 1;
+    S.today.gate += S.admission;
+    S.today.extra += extra;
+    S.stats.visitorsTotal += 1;
+    S.stats.gateTotal += S.admission;
+    S.stats.earned += S.admission + extra;
+    /* The gallery walks one of these in through the front door when it can keep
+       up; the queue is capped so a busy day does not stack up thousands of
+       unwalked arrivals. */
+    if (S.pendingArrivals < 40) S.pendingArrivals++;
+  }
+
+  function closeBooks(S) {
+    const t = S.today;
+    S.yesterday = { day: S.day, visitors: t.visitors, gate: t.gate, extra: t.extra };
+    S.history.push(S.yesterday);
+    if (S.history.length > 14) S.history.shift();
+    S.stats.bestDay = Math.max(S.stats.bestDay || 0, t.gate + t.extra);
+    if (t.visitors > 0)
+      log(S, "<b>Day " + S.day + " closed.</b> " + Math.round(t.visitors) +
+             " through the door — " + Math.round(t.gate) + " on admissions, " +
+             Math.round(t.extra) + " in the shop and café.", "good");
+  }
+
+  /* The museum clock, the door, and the till. Returns the survey so the caller
+     does not have to compute it twice. */
+  function runMuseum(S, dt) {
+    const sv = S7.museum.survey(S);
+    const wasOpen = S7.museum.isOpen(S);
+
+    /* The Institute grant runs whether or not anyone came. */
+    const standing = S7.museum.standingIncome(S) * dt;
+    S.funds += standing;
+    S.stats.earned += standing;
+
+    if (wasOpen) {
+      S.arrivalAcc += S7.museum.arrivalRate(S, sv) * dt * S7.museum.clockRate(S);
+      let guard = 0;
+      while (S.arrivalAcc >= 1 && guard++ < 500) { S.arrivalAcc -= 1; admit(S, sv); }
+      if (guard >= 500) S.arrivalAcc = 0;          /* absurd rate; do not spin */
+    }
+
+    S.minute += dt * S7.museum.clockRate(S);
+    if (S.minute >= S7.museum.DAY_MINUTES) { S.minute -= S7.museum.DAY_MINUTES; S.day++; }
+
+    const nowOpen = S7.museum.isOpen(S);
+    if (wasOpen && !nowOpen) closeBooks(S);
+    if (!wasOpen && nowOpen) {
+      S.today = { visitors: 0, gate: 0, extra: 0 };
+      S.arrivalAcc = 0;
+      if (sv.count > 0) log(S, "Day " + S.day + ". Doors open at nine.");
+    }
+    return sv;
+  }
+
   /* ---------- the tick ----------------------------------------------------- */
 
   function step(S, dt) {
     if (!S.started) return;
     S.stats.playtime += dt;
 
-    const sv = S7.museum.survey(S);
-    const inc = S7.museum.income(S, sv);
-    S.funds += inc * dt;
-    S.stats.earned += inc * dt;
-    S.stats.visitorsTotal += (S7.museum.visitorsPerMin(S, sv) / 60) * dt;
+    const sv = runMuseum(S, dt);
 
     /* brush charges */
     if (S.stamina < S.maxStam) {
@@ -354,21 +412,31 @@
      bonus, because you were not there to file one. */
 
   const OFFLINE_CAP = 12 * 3600;
+  /* One full cycle of the museum clock in real seconds: 480 open, then the
+     night at 16x. */
+  const CYCLE_SECONDS = S7.museum.OPEN_MINUTES + (S7.museum.DAY_MINUTES - S7.museum.OPEN_MINUTES) / S7.museum.NIGHT_SPEED;
 
   function catchUp(S, seconds) {
     const t = Math.min(OFFLINE_CAP, Math.max(0, seconds));
     if (t < 60 || !S.started) return null;
     const rate = 0.5 * S.mul.offline * (1 + S.add.offline);
-    const report = { seconds: t, funds: 0, depth: 0, finds: [] };
+    const report = { seconds: t, funds: 0, depth: 0, finds: [], days: 0, visitors: 0 };
 
     /* Coarse integration: one step a minute is plenty for an idle curve, and
        keeps a twelve-hour absence under a thousand iterations. */
     const stepSize = 60;
     for (let elapsed = 0; elapsed < t; elapsed += stepSize) {
       const sv = S7.museum.survey(S);
-      const gain = S7.museum.income(S, sv) * stepSize * rate;
+      /* Days, not seconds: a chunk of stepSize real seconds is that fraction
+         of a museum day, and a day is worth a day's admissions. */
+      const days = (stepSize / CYCLE_SECONDS) * rate;
+      const v = S7.museum.visitorsPerDay(S, sv) * days;
+      const gain = v * S7.museum.perVisitor(S, sv) + S7.museum.standingIncome(S) * stepSize * rate;
       S.funds += gain; S.stats.earned += gain; report.funds += gain;
-      S.stats.visitorsTotal += (S7.museum.visitorsPerMin(S, sv) / 60) * stepSize * rate;
+      S.stats.visitorsTotal += v;
+      S.stats.gateTotal += v * S.admission;
+      report.days += days;
+      report.visitors += v;
 
       if (S.pending || S.active) continue;    /* a dig left open blocks descent */
       if (S7.state.atFloor(S)) continue;
@@ -403,6 +471,11 @@
 
   function finalise(S, report, elapsed) {
     report.seconds = elapsed;
+    /* Move the clock on so the museum does not resume mid-afternoon on a day
+       that finished hours ago. */
+    S.day += Math.floor(report.days);
+    S.today = { visitors: 0, gate: 0, extra: 0 };
+    S.minute = S7.museum.OPEN_AT - 5;
     if (report.finds.length)
       log(S, "While the site was unattended the crew lifted and accessioned " +
              report.finds.length + " item" + (report.finds.length === 1 ? "" : "s") + ".");
@@ -413,6 +486,7 @@
   S7.game = {
     CELL, GRID, KEYSTONES, MILESTONES,
     SITE_NAMES, siteName, canOpenNewSite, openNewSite,
+    admit, closeBooks, runMuseum,
     log, checkMilestones, mintFind, beginDig, brush, exposure, multiplierFor,
     fileInterpretation, finishDig, accession, step, catchUp,
   };

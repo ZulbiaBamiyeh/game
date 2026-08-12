@@ -81,6 +81,14 @@
     refreshAll();
   }
 
+  /* Admission steps in halves under a fiver and whole units above it, which is
+     how museums actually price. */
+  function setPrice(dir) {
+    const step = S.admission < 5 ? 0.5 : S.admission < 20 ? 1 : 5;
+    S.admission = Math.max(0, Math.round((S.admission + dir * step) * 2) / 2);
+    refreshAll();
+  }
+
   function newSite() {
     if (!G.canOpenNewSite(S)) return;
     if (!window.confirm("Close " + G.siteName(S) + " and open " + V.nextSite(S) +
@@ -293,12 +301,12 @@
     rooms.forEach((r, i) => dots.children[i].classList.toggle("on", r === here));
 
     const sv = M.survey(S);
-    const vpm = M.visitorsPerMin(S, sv);
     $("gal-crowd").textContent = sv.count === 0
       ? "closed to the public"
-      : crowd.overflow > 0
-        ? V.fmt(crowd.crowd) + " in view of " + V.fmt(vpm) + "/min · drag to walk the floor"
-        : V.fmt(crowd.crowd) + " in the building · drag to walk the floor";
+      : !M.isOpen(S)
+        ? "closed · doors open at nine"
+        : crowd.agents.length + " in the building · " + Math.round(S.today.visitors) +
+          " through the door today";
   }
 
   /* ---------- refresh ------------------------------------------------------------ */
@@ -307,7 +315,12 @@
     V.renderStats(S);
     V.renderLog(S);
     if (S.tab === "site") V.renderShops(S, buy);
-    if (S.tab === "museum") { V.renderShops(S, buy); V.renderMuseum(S, openArtifact); }
+    if (S.tab === "museum") {
+      V.renderShops(S, buy);
+      V.renderMuseum(S, openArtifact);
+      for (const b of document.querySelectorAll("[data-price]"))
+        b.addEventListener("click", () => setPrice(parseInt(b.getAttribute("data-price"), 10)));
+    }
     if (S.tab === "research") V.renderResearch(S, buyResearch, newSite);
   }
 
@@ -478,6 +491,7 @@
     state: () => S,
     refresh: refreshAll,
     tab: setTab,
+    crowd: () => crowd,
     skipTo: (metres) => { S.depth = Math.min(S7.cultures.MAX_DEPTH, metres); refreshAll(); },
   };
 

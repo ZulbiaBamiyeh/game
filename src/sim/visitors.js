@@ -29,6 +29,20 @@
   const BENCH_Y = 146;           /* where a bench stands on the floor */
   const MAX_AGENTS = 42;
 
+  /* The entrance hall, which every museum has and which is where the money
+     actually changes hands. */
+  const FOYER_W = 250;
+  /* People are drawn 27 logical pixels across, so "not touching" is about
+     thirteen apart and a queue needs twenty between one pair of shoulders and
+     the next. Both were tuned by looking at the entrance hall, not by maths. */
+  const PERSONAL = 13;
+  const QUEUE_GAP = 26;
+  const QUEUE_MAX = 4;
+
+  const DOOR_X = 34;             /* the middle of the street doors */
+  const DESK_X = 168;            /* the middle of the admissions desk */
+  const DESK_W = 54;
+
   /* ---------- layout -------------------------------------------------------- */
 
   /* Rooms are era bands by default, but an artifact can be hung anywhere the
@@ -48,7 +62,17 @@
     for (const e of S7.cultures.ERAS) eraById[e.id] = e;
 
     const rooms = [];
-    let x = 0;
+    /* Room zero is always the entrance hall. It has no exhibits; it has a desk. */
+    rooms.push({
+      era: { id: "foyer", name: "Entrance hall", period: "admissions and cloakroom" },
+      x: 0, width: FOYER_W, exhibits: [], items: [], benches: [
+        { x: FOYER_W - 40, y: BENCH_Y,
+          seats: [FOYER_W - 53, FOYER_W - 40, FOYER_W - 27].map((sxx) => ({ x: sxx, taken: null })) },
+      ],
+      foyer: true, doorX: DOOR_X, deskX: DESK_X, deskW: DESK_W,
+    });
+
+    let x = FOYER_W + DOOR;
     for (const era of S7.cultures.ERAS) {
       const items = byEra.get(era.id);
       if (!items) continue;
@@ -81,10 +105,6 @@
       rooms.push({ era, x, width, exhibits, items, benches });
       x += width + DOOR;
     }
-
-    if (!rooms.length)
-      rooms.push({ era: { id: "empty", name: "The room in town", period: "not yet open" },
-                   x: 0, width: 320, exhibits: [], items: [], benches: [] });
 
     const total = rooms[rooms.length - 1].x + rooms[rooms.length - 1].width;
     const exhibits = [], benches = [];
@@ -138,23 +158,26 @@
 
   let nextId = 1;
 
-  /* `where` is a strip x, or undefined to come in off one of the ends. Most
-     visitors are placed mid-building: you are panning around a museum that is
-     already open, not watching one fill up from the door. */
+  /* `where` is a strip x for someone already inside; leave it out and they
+     come in through the street doors and pay like everybody else. */
   function spawn(rng, L, where) {
     const type = S7.people.pickType(rng);
     const def = S7.people.typeById[type];
     const sprite = S7.people.makePerson(rng.int(1, 1e9), type);
-    const fromLeft = rng.chance(0.5);
-    const x = where !== undefined ? where : (fromLeft ? -14 : L.total + 14);
+    const arriving = where === undefined;
+    const x = arriving ? DOOR_X - 18 - rng.range(0, 8) : where;
     return {
       id: nextId++,
       type, def, sprite,
       x,
-      z: rng.range(0, 1),
-      dir: fromLeft ? 1 : -1,
+      /* Arrivals share the front of the room, where the doors are. */
+      z: arriving ? 0.74 + rng.range(0, 0.16) : rng.range(0, 1),
+      dir: 1,
       speed: (9 + rng.range(-2, 3)) * def.speed,
-      state: "walk",
+      state: arriving ? "enter" : "walk",
+      ticket: 0,
+      paid: null,
+      pose: 0,
       timer: 0,
       target: null,
       visits: rng.int(2, 7),
@@ -168,6 +191,49 @@
          walking round for a while first. */
       restWish: def.stick ? rng.range(0.45, 0.75) : rng.range(0.05, 0.18),
     };
+  }
+
+  /* How many people are already queueing at the desk in front of this one.
+     Ranked by the ticket taken on arrival, not by position: rank people by
+     where they are standing and two who arrive in the same second both think
+     they are first, walk into each other, and swap places forever. */
+  function queueAhead(state, a) {
+    let n = 0;
+    for (const o of state.agents) {
+      if (o === a) continue;
+      if (o.state !== "enter" && o.state !== "pay") continue;
+      if (o.ticket < a.ticket) n++;
+    }
+    return Math.min(n, QUEUE_MAX);
+  }
+
+  /* Nudge people out of each other. Without this a popular exhibit ends up
+     with six visitors standing in exactly the same pixel. */
+  function separate(state, dt) {
+    const list = state.agents;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (a.state === "sit") continue;
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+        if (b.state === "sit") continue;
+        const dz = Math.abs(a.z - b.z);
+        if (dz > 0.16) continue;
+        const dx = b.x - a.x;
+        const gap = Math.abs(dx);
+        const near = a.state === "sit" || b.state === "sit" ? 0 : PERSONAL;
+        if (gap > near || gap < 0.001) continue;
+        const push = (near - gap) * dt * 2.2;
+        const s2 = dx < 0 ? -1 : 1;
+        a.x -= s2 * push;
+        b.x += s2 * push;
+        /* and let them slide past each other in depth as well as along */
+        const zPush = (0.16 - dz) * dt * 1.4;
+        if (a.z < b.z) { a.z -= zPush; b.z += zPush; } else { a.z += zPush; b.z -= zPush; }
+        a.z = Math.max(0, Math.min(1, a.z));
+        b.z = Math.max(0, Math.min(1, b.z));
+      }
+    }
   }
 
   /* Somewhere to sit, if there is one within a sensible walk. */
@@ -224,14 +290,19 @@
   function step(state, S, dt, L) {
     const rng = state.rng;
     const sv = S7.museum.survey(S);
-    const vpm = S7.museum.visitorsPerMin(S, sv);
+    const open = S7.museum.isOpen(S);
 
-    /* Population is a squashed function of the real visitor rate: the museum
-       can legitimately be doing five thousand a minute late on, and forty-two
-       people is as many as the room can read. */
-    const want = sv.count === 0 ? 0 : Math.max(1, Math.min(MAX_AGENTS, Math.round(2 + Math.sqrt(vpm))));
+    /* How many people are in the building right now: arrivals per minute times
+       how long each one stays. A visitor who stays forty minutes and a door
+       doing three a minute means a hundred and twenty people inside — more
+       than the room can draw, so it is capped and the header says so. */
+    const perMin = S7.museum.arrivalRate(S, sv);
+    const dwellMinutes = 25 * S7.museum.softCap(S.mul.dwell * (1 + S.add.dwell), 1.5);
+    const inside = open ? perMin * dwellMinutes : 0;
+    const want = sv.count === 0 ? 0 : Math.min(MAX_AGENTS, Math.round(inside));
     state.crowd = want;
-    state.overflow = Math.max(0, Math.round(vpm) - want);
+    state.inside = inside;
+    state.overflow = Math.max(0, Math.round(inside) - want);
 
     /* On the first tick after opening the tab, fill the building rather than
        making the player watch forty people walk in from the car park. */
@@ -245,13 +316,34 @@
       }
     }
 
-    state.spawnTimer -= dt;
-    if (state.agents.length < want && state.spawnTimer <= 0) {
-      state.spawnTimer = rng.range(0.15, 0.9);
-      const near = L.exhibits.length && rng.chance(0.65)
-        ? rng.pick(L.exhibits).x + rng.range(-130, 130) : undefined;
-      state.agents.push(spawn(rng, L, near));
+    /* Everyone who walks in has been admitted by the till, so the crowd is a
+       picture of the real gate rather than a decoration with its own rules. */
+    /* One through the door at a time, however many the till admitted this
+       frame — a coachload arriving in the same tick is a queue, not a pile. */
+    state.doorTimer -= dt;
+    if (S.pendingArrivals > 0 && state.doorTimer <= 0 && state.agents.length < want + 10) {
+      S.pendingArrivals--;
+      state.doorTimer = rng.range(0.35, 0.9);
+      const a = spawn(rng, L);
+      a.ticket = state.ticket++;
+      state.agents.push(a);
     }
+    /* If the till is running far ahead of the door, stop the backlog growing
+       without bound: those people came and went while the tab was elsewhere. */
+    if (S.pendingArrivals > 4) S.pendingArrivals = 4;
+    /* If the door is quiet but the building should hold more than it does —
+       after a tab switch, say — top up with people already inside. */
+    state.spawnTimer -= dt;
+    if (open && state.agents.length < want * 0.6 && state.spawnTimer <= 0 && L.exhibits.length) {
+      state.spawnTimer = rng.range(0.3, 1.1);
+      state.agents.push(spawn(rng, L, rng.pick(L.exhibits).x + rng.range(-110, 110)));
+    }
+    /* At closing time everyone drifts out. */
+    if (!open) for (const a of state.agents)
+      if (a.state !== "leave" && rng.chance(dt * 0.8)) {
+        if (a.seat) { a.seat.taken = null; a.seat = null; }
+        a.state = "leave";
+      }
     while (state.agents.length > want + 6) {
       const gone = state.agents.pop();
       if (gone && gone.seat) gone.seat.taken = null;
@@ -264,10 +356,32 @@
         a.bubble.t -= dt;
         if (a.bubble.t <= 0) a.bubble = null;
       }
+      if (a.paid) { a.paid.t -= dt; if (a.paid.t <= 0) a.paid = null; }
       if (a.flash > 0) a.flash -= dt;
       a.chatCooldown -= dt;
 
-      if (a.state === "walk") {
+      if (a.state === "enter") {
+        /* Queue at the desk. People stack up behind whoever is being served. */
+        /* Nobody dawdles on the way to a till, so the walk in is brisker than
+           the amble round the galleries that follows it. */
+        const rank = queueAhead(state, a);
+        const target = DESK_X - 26 - rank * QUEUE_GAP;
+        const d = target - a.x;
+        const v = a.speed * 1.7;
+        a.dir = d < 0 ? -1 : 1;
+        a.x += Math.sign(d) * Math.min(Math.abs(d), v * dt);
+        a.phase += v * dt * 0.62;
+        if (rank === 0 && Math.abs(d) < 1.5) { a.state = "pay"; a.timer = rng.range(0.7, 1.6); }
+      } else if (a.state === "pay") {
+        a.timer -= dt;
+        a.dir = 1;
+        if (a.timer <= 0) {
+          a.paid = { t: 1.5, life: 1.5, amount: S.admission };
+          a.state = "walk";
+          a.target = null;
+          if (rng.chance(0.10)) say(state, a, S7.remarks.ambient(rng, a.type), 3.2);
+        }
+      } else if (a.state === "walk") {
         if (!a.target) {
           a.target = chooseTarget(rng, L, a);
           if (!a.target) { a.state = "leave"; continue; }
@@ -322,18 +436,20 @@
           a.state = "walk";
           a.restWish *= 0.35;                    /* they have had their sit down */
         }
-      } else {                                   /* leave */
-        const exitLeft = a.x < L.total / 2;
-        a.dir = exitLeft ? -1 : 1;
-        a.x += a.dir * a.speed * 1.25 * dt;
-        a.phase += a.speed * dt * 0.6;
-        a.z += (0.85 - a.z) * dt * 0.8;
-        if (a.x < -24 || a.x > L.total + 24) {
+      } else {                                   /* leaving, by the way they came in */
+        const d = DOOR_X - 30 - a.x;
+        a.dir = d < 0 ? -1 : 1;
+        a.x += Math.sign(d) * Math.min(Math.abs(d), a.speed * 1.3 * dt);
+        a.phase += a.speed * dt * 0.7;
+        a.z += (0.86 - a.z) * dt * 0.8;
+        if (a.x <= DOOR_X - 28) {
           if (a.seat) a.seat.taken = null;
           state.agents.splice(i, 1);
         }
       }
     }
+
+    separate(state, dt);
 
     /* Conversations: two people looking at the same thing, close together. */
     state.chatTimer -= dt;
@@ -368,6 +484,8 @@
       agents: [],
       spawnTimer: 0,
       chatTimer: 1,
+      ticket: 1,
+      doorTimer: 0,
       crowd: 0,
       overflow: 0,
       seeded: false,
@@ -377,5 +495,6 @@
   S7.visitors = {
     create, step, layout, getLayout, invalidate, reseat, place, roomAt, feetY, scaleOf,
     H, FLOOR_Y, WALK_NEAR, WALK_FAR, ROOM_PAD, DOOR, BENCH_Y, MAX_AGENTS,
+    FOYER_W, DOOR_X, DESK_X, DESK_W,
   };
 })(window.S7 = window.S7 || {});

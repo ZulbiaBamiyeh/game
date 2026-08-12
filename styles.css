@@ -194,6 +194,31 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .log p.good{color:var(--good)}
 .log .d{color:var(--ochre-2);font-size:9px;letter-spacing:.1em;margin-right:6px}
 
+/* ---------- the clock and the till ---------------------------------------- */
+
+.clock{
+  font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ochre);
+  border:1px solid var(--line);padding:4px 9px;white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.clock.shut{color:var(--ink-3);border-color:#2d2617}
+
+.tillrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tillrow .ghost{width:30px;height:30px;font-size:15px;padding:0;flex:none;line-height:1}
+.price{text-align:center;min-width:64px}
+.price b{display:block;font-size:20px;font-weight:400;color:var(--ochre);
+  font-variant-numeric:tabular-nums;line-height:1.1}
+.price span{font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
+.pricenote{font-size:11px;color:var(--ink-2);flex:1;min-width:130px;line-height:1.5}
+.pricenote span{font-size:10px;color:var(--ink-3)}
+.tillbook{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:11px;background:var(--line)}
+.tillbook>div{background:var(--panel);padding:6px 8px;font-size:10.5px;color:var(--ink-2)}
+.tillbook span{display:block;font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3)}
+.tillbook b{color:var(--bone);font-weight:400;font-size:13px}
+.tillhist{display:flex;align-items:flex-end;gap:2px;height:28px;margin-top:9px}
+.tillhist i{flex:1;background:var(--ochre-2);display:block;min-height:2px}
+.tillhist i:last-child{background:var(--ochre)}
+
 /* ---------- the gallery floor --------------------------------------------- */
 
 .view>.fullwidth{grid-column:1 / -1}

@@ -50,11 +50,14 @@
     $("s-depth").textContent = S.depth.toFixed(1) + " m";
     $("s-rate").textContent = S7.state.descentRate(S).toFixed(2) + " m/s";
     $("s-funds").textContent = fmt(S.funds);
-    $("s-inc").textContent = "+" + fmt(M.income(S, sv)) + "/s";
+    $("s-inc").textContent = "+" + fmt(M.incomeRate(S, sv)) + "/s";
     $("s-stars").textContent = starString(sv.rating);
     $("s-rating").textContent = sv.rating.toFixed(1) + " / 100";
-    $("s-vis").textContent = fmt(M.visitorsPerMin(S, sv)) + "/min";
-    $("s-vistot").textContent = fmt(S.stats.visitorsTotal) + " to date";
+    const open = M.isOpen(S);
+    $("s-vis").textContent = Math.round(S.today.visitors) + " today";
+    $("s-vistot").textContent = open
+      ? "~" + fmt(M.visitorsPerDay(S, sv)) + "/day · open"
+      : "closed · " + fmt(S.stats.visitorsTotal) + " to date";
     $("s-und").textContent = fmt(S.understanding);
     $("s-coll").textContent = S.collection.length + " accessioned";
     $("tab-mus-n").textContent = S.collection.length ? "(" + S.collection.length + ")" : "";
@@ -62,6 +65,12 @@
     const h1 = document.querySelector(".topbar h1");
     const title = "Deep Survey · " + S7.game.siteName(S);
     if (h1.textContent !== title) h1.textContent = title;
+
+    const clock = $("s-clock");
+    if (clock) {
+      clock.textContent = "Day " + S.day + " · " + M.clockText(S);
+      clock.classList.toggle("shut", !open);
+    }
 
     const era = C.eraAt(S.depth);
     $("strat-name").textContent = era.name;
@@ -173,16 +182,19 @@
     $("m-rating").textContent = sv.rating.toFixed(1);
     $("m-verdict").textContent = M.verdict(sv);
 
+    const proj = M.projectedDay(S, sv);
     const metrics = [
       ["On display", sv.count],
-      ["Significance", fmt(sv.sig)],
       ["Traditions", sv.cultures],
-      ["Visitors", fmt(M.visitorsPerMin(S, sv)) + "/min"],
-      ["Per visitor", fmt(M.spendPerVisitor(S, sv))],
-      ["Gate income", fmt(M.income(S, sv)) + "/s"],
+      ["Visitors/day", fmt(proj.visitors)],
+      ["Admission", fmt(S.admission)],
+      ["Per visitor", fmt(M.perVisitor(S, sv))],
+      ["A day's take", fmt(proj.gate + proj.extra)],
     ];
     $("m-metrics").innerHTML = metrics.map((m) =>
       '<div><div class="mk">' + esc(m[0]) + '</div><div class="mv">' + esc(m[1]) + '</div></div>').join("");
+
+    renderTill(S, sv);
 
     const pct = sv.cap ? Math.min(100, 100 * sv.count / sv.cap) : 0;
     const fill = $("capfill");
@@ -252,6 +264,51 @@
       : "every tradition encountered";
   }
 
+  /* ---------- the till ------------------------------------------------------
+     Admission price is the one number the player sets directly, and it cuts
+     both ways: charge over the going rate and the gate thins out. */
+
+  function renderTill(S, sv) {
+    const box = $("till");
+    if (!box) return;
+    const suggested = M.suggestedPrice(sv);
+    const factor = M.priceFactor(S, sv);
+    const rel = S.admission < suggested * 0.6 ? "well under the going rate"
+              : S.admission < suggested * 0.95 ? "a little cheap"
+              : S.admission <= suggested * 1.15 ? "about right"
+              : S.admission <= suggested * 1.6 ? "on the steep side"
+              : "more than people will pay";
+    const today = S.today;
+    const y = S.yesterday;
+
+    box.innerHTML =
+      '<div class="tillrow">' +
+        '<button class="ghost" data-price="-1" type="button">−</button>' +
+        '<div class="price"><b>' + fmt(S.admission) + '</b><span>admission</span></div>' +
+        '<button class="ghost" data-price="1" type="button">+</button>' +
+        '<div class="pricenote">' + esc(rel) + '<br><span>going rate ' + fmt(suggested) +
+        ' · footfall ' + Math.round(factor * 100) + '%</span></div>' +
+      '</div>' +
+      '<div class="tillbook">' +
+        '<div><span>Today</span><b>' + Math.round(today.visitors) + '</b> in · ' +
+          fmt(today.gate) + ' gate · ' + fmt(today.extra) + ' shop</div>' +
+        (y ? '<div><span>Day ' + y.day + '</span><b>' + Math.round(y.visitors) + '</b> in · ' +
+             fmt(y.gate + y.extra) + ' total</div>'
+           : '<div><span>Yesterday</span>no trading yet</div>') +
+      '</div>' +
+      (S.history.length > 1 ? historyStrip(S) : "");
+  }
+
+  /* Fourteen days of takings as a row of bars. */
+  function historyStrip(S) {
+    const max = Math.max(1, ...S.history.map((d) => d.gate + d.extra));
+    return '<div class="tillhist">' + S.history.map((d) => {
+      const h = Math.max(2, Math.round(26 * (d.gate + d.extra) / max));
+      return '<i style="height:' + h + 'px" title="Day ' + d.day + ': ' +
+             fmt(d.gate + d.extra) + '"></i>';
+    }).join("") + '</div>';
+  }
+
   /* ---------- records ------------------------------------------------------ */
 
   function recordHTML(S, a, opts) {
@@ -318,7 +375,7 @@
 
   S7.views = {
     $, fmt, fmtTime, starString, esc,
-    renderStats, renderShops, renderResearch, renderMuseum, renderLog, nextSite,
+    renderStats, renderShops, renderResearch, renderMuseum, renderLog, renderTill, nextSite,
     recordHTML, paintRecords, boonHTML, shopHTML,
   };
 })(window.S7 = window.S7 || {});

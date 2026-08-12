@@ -130,14 +130,21 @@ function serve() {
       }
       if (S.pending) S7.game.accession(S, true);
       sinceBuy += DT;
-      if (sinceBuy >= 5) { sinceBuy = 0; buyAnything(); }
+      if (sinceBuy >= 5) {
+        sinceBuy = 0;
+        buyAnything();
+        /* keep admission near the going rate, the way a player would */
+        S.admission = S7.museum.suggestedPrice(S7.museum.survey(S));
+      }
       if (mark < marks.length && t >= marks[mark]) {
         const sv = S7.museum.survey(S);
         out.curve.push({
           at: marks[mark] + "s", depth: +S.depth.toFixed(1),
-          funds: Math.round(S.funds), incPerSec: +S7.museum.income(S, sv).toFixed(2),
+          day: S.day,
+          funds: Math.round(S.funds), incPerSec: +S7.museum.incomeRate(S, sv).toFixed(2),
           coll: S.collection.length, rating: +sv.rating.toFixed(1),
-          visPerMin: +S7.museum.visitorsPerMin(S, sv).toFixed(1),
+          visPerDay: Math.round(S7.museum.visitorsPerDay(S, sv)),
+          price: S.admission,
           U: Math.round(S.understanding),
         });
         mark++;
@@ -175,13 +182,18 @@ function serve() {
     const cv = document.getElementById("c-gallery");
     if (!cv) return "no gallery canvas";
     document.getElementById("gal-arrange").click();
-    S7.galleryView.goToRoom(0);
+    /* Room 0 is the entrance hall and has nothing hanging in it; find the
+       first gallery with enough on the walls to reorder. */
+    const rooms = S7.visitors.getLayout(S).rooms;
+    const ri = rooms.findIndex((r0) => !r0.foyer && r0.exhibits.length >= 3);
+    if (ri < 0) return "ok (no room big enough to test)";
+    S7.galleryView.goToRoom(ri);
     await new Promise((r) => setTimeout(r, 1200));
 
-    const room = S7.visitors.getLayout(S).rooms[0];
-    if (room.exhibits.length < 3) return "ok (room 0 too small to test)";
+    const room = S7.visitors.getLayout(S).rooms[ri];
     const before = room.exhibits.map((e) => e.a.no).join(",");
     const cam = S7.galleryView.probe(0, 0).cam;
+    if (cam === undefined) return "no camera";
     const e0 = room.exhibits[0], last = room.exhibits[room.exhibits.length - 1];
     const by = e0.mount === "wall" ? (e0.h <= 50 ? 96 : 108) - e0.h
              : e0.mount === "plinth" ? Math.max(64, Math.min(108, Math.round(74 + e0.h / 2))) - e0.h
@@ -200,9 +212,29 @@ function serve() {
     fire("pointermove", to.x, to.y);
     fire("pointerup", to.x, to.y);
     await new Promise((r2) => setTimeout(r2, 250));
-    const after = S7.visitors.getLayout(S).rooms[0].exhibits.map((e) => e.a.no).join(",");
+    const after = S7.visitors.getLayout(S).rooms[ri].exhibits.map((e) => e.a.no).join(",");
     document.getElementById("gal-arrange").click();
     return before === after ? "drop did not reorder (" + before + ")" : "ok";
+  });
+
+  /* Visitor numbers have to stay in the range an actual museum lives in. */
+  const scale = await page.evaluate(() => {
+    const out = [];
+    for (const n of [1, 10, 40, 120, 260]) {
+      const S = S7.state.fresh(4242);
+      S.started = true;
+      S.bonus.capacity = n * 2;
+      for (let i = 0; i < n; i++) {
+        const a = S7.artifacts.makeArtifact((Math.random() * 1e9) | 0, 5 + (i / n) * 800);
+        a.no = String(i); a.display = true; S.collection.push(a);
+      }
+      const sv = S7.museum.survey(S);
+      S.admission = S7.museum.suggestedPrice(sv);
+      const p = S7.museum.projectedDay(S, sv);
+      out.push({ items: n, rating: +sv.rating.toFixed(1), price: S.admission,
+                 perDay: Math.round(p.visitors), dayTake: Math.round(p.gate + p.extra) });
+    }
+    return out;
   });
 
   /* Physical sizes should span from bead to monument, not cluster on one value. */
@@ -251,12 +283,25 @@ function serve() {
   console.log("  traditions on display:", sim.cultures, "· all finite:", sim.finite);
   console.log("save round-trip:", saveOk);
   console.log("art generators:", genErrors.length ? genErrors.slice(0, 20) : "all clean");
+  console.log("museum scale (a real museum does tens to thousands a day):");
+  for (const r of scale) console.log("  ", JSON.stringify(r));
   console.log("artifact sizes:", JSON.stringify(sizes));
   console.log("rehang:", rehang);
   console.log("console errors:", errors.length ? errors.slice(0, 20) : "none");
 
+  /* The live curve is the one that matters. The isolated scale table only
+     proves the formula; this proves that two hours of a greedy player driving
+     every multiplier at once still lands on a number a museum could have. */
+  const busiest = sim.curve.reduce((m, r) => Math.max(m, r.visPerDay), 0);
+  const dearest = sim.curve.reduce((m, r) => Math.max(m, r.price), 0);
+  console.log("busiest day on the curve:", busiest, "· dearest ticket:", dearest);
+
   const failed = errors.length || genErrors.length || saveOk !== "ok" || !sim.finite ||
-                 !/^ok/.test(rehang) || sizes.max < 50 || sizes.min > 14;
+                 !/^ok/.test(rehang) || sizes.max < 50 || sizes.min > 14 ||
+                 scale[0].perDay > 60 ||           /* one object is not a day out */
+                 scale[scale.length - 1].perDay > 12000 ||  /* nor is it the Louvre */
+                 busiest > 12000 ||                /* and neither is hour two */
+                 dearest > 40;                     /* nobody pays £40 to see a shaft */
   if (failed) { console.error("\nSMOKE FAILED"); process.exit(1); }
   console.log("\nSMOKE OK");
 })();
