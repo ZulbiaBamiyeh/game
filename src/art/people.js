@@ -132,10 +132,22 @@
     ctx.globalAlpha = 0.20;
     box(hx + 2, headY, 1, 6, "#000");                  /* cheek shadow */
     ctx.globalAlpha = 1;
-    box(hx - 2, hairY, 5, 2, p.hair);
-    if (p.longHair) { box(hx - 3, headY, 1, 5, p.hair); box(hx + 3, headY, 1, 5, p.hair); }
+    /* Hair sits on the crown only — never a full-width slab that reads as a
+       bar when the sprite is blown up for walking. */
+    if (!p.hat) {
+      box(hx - 2, hairY, 5, 2, p.hair);
+      if (p.longHair) {
+        box(hx - 3, headY, 1, 5, p.hair);
+        box(hx + 3, headY, 1, 5, p.hair);
+      }
+    } else {
+      /* Small crown + short brim. The old 9×2 block looked like a UI bar. */
+      box(hx - 2, hairY - 1, 5, 2, p.hatColour);       /* crown */
+      box(hx - 3, hairY + 1, 7, 1, p.hatColour);       /* brim, just above brow */
+      put(hx - 2, hairY - 2, p.hatColour);             /* tiny top peak */
+      put(hx + 2, hairY - 2, p.hatColour);
+    }
     if (p.beard) box(hx - 1, headY + 4, 4, 2, p.hair);
-    if (p.hat) { box(hx - 4, hairY - 1, 9, 2, p.hatColour); box(hx - 2, hairY - 2, 5, 1, p.hatColour); }
 
     if (!o.back) {
       const eye = o.eyesUp ? headY + 2 : headY + 3;
@@ -148,8 +160,11 @@
 
     /* --- carried things --------------------------------------------------- */
     if (p.bag && !o.sitting) {
+      /* Bag on the hip + a short shoulder strap on one side only — a strap
+         drawn across the whole torso read as a black bar through the body. */
       box(cx + 4, torsoY + 4, 3, 4, p.bagColour);
-      box(cx - 3, torsoY, 7, 1, p.bagColour);
+      box(cx + 3, torsoY + 1, 1, 4, p.bagColour);
+      put(cx + 2, torsoY, p.bagColour);
     } else if (p.bag) {
       box(cx - 8, hipY - 1, 3, 4, p.bagColour);
     }
@@ -169,7 +184,8 @@
     }
     if (p.stick) box(cx + 7, torsoY + 2, 1, legEnd - torsoY - 1, "#5a4632");
     if (p.staff) {
-      box(cx - 4, torsoY, 8, 2, "#242430");
+      /* Lanyard badge on the chest, not a full-width shoulder bar. */
+      box(cx - 1, torsoY + 1, 3, 3, "#242430");
       put(cx, torsoY + 2, "#c79a42");
     }
   }
