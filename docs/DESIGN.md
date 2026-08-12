@@ -1,4 +1,4 @@
-# Site 7 — Deep Survey
+# The Hollow Museum
 
 **An idle excavation-and-museum game.** You are handed a worthless dig site and a room
 in town that the Institute is calling a museum. You dig down. What you lift goes on
@@ -11,7 +11,7 @@ Somewhere around four hundred metres it stops being archaeology.
 
 ## 1. The premise
 
-> **Site 7 is not a site. It is a collection, buried in order, by someone who knew who
+> **Holloway Field is not a site. It is a collection, buried in order, by someone who knew who
 > would dig it up.**
 
 Everything in the game falls out of that one sentence:
@@ -223,7 +223,7 @@ coach party would detour for. `npm run smoke` prints this table on every run.
 | < 15 | A modest regional collection. School parties on Tuesdays. |
 | < 40 | A serious collection. The county is proud of it. |
 | < 70 | One of the great collections. Scholars book months ahead. |
-| ≥ 85 | There is nothing else like it, because there is nowhere else like Site 7. |
+| ≥ 85 | There is nothing else like it. The Hollow Museum is the only place this sequence is known. |
 
 ### The floor
 

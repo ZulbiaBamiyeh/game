@@ -20,7 +20,7 @@
       depth: 0,
       funds: 0,
       understanding: 0,
-      sites: 1,               /* Site 7 is the first. Others follow. */
+      sites: 1,               /* Holloway Field is the first shaft. Others follow. */
 
       /* The museum clock. One museum minute is one real second while the doors
          are open; the night runs at 16x so you are not waiting for morning. */

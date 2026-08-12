@@ -39,7 +39,7 @@
     show("m-intro", false);
     if (!S.started) {
       S.started = true;
-      G.log(S, "Shaft opened at Site 7. One drill, one digger, and a room in town.");
+      G.log(S, "Shaft opened under The Hollow Museum. One drill, one digger, and a room in town.");
       G.log(S, "Institute expects a preliminary report inside the year.");
     }
     refreshAll();
@@ -251,7 +251,7 @@
       '<button class="action" id="mn-import"><span class="bt">Restore from a save string</span></button>' +
       '</div>' +
       '<div class="rowbtns"><button class="action" id="mn-wipe">' +
-      '<span class="bt dangerous">Abandon Site 7 and start again</span>' +
+      '<span class="bt dangerous">Abandon the museum and start again</span>' +
       '<span class="bd">Deletes the collection. There is no undo.</span></button></div>';
 
     $("mn-export").addEventListener("click", () => {

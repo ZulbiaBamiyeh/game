@@ -1,6 +1,6 @@
-# Site 7 — Deep Survey
+# The Hollow Museum
 
-An idle excavation-and-museum game. You are handed a worthless dig site and a room in
+An idle excavation-and-museum game. You are handed a worthless field and a room in
 town the Institute is calling a museum. You dig down; what you lift goes on display;
 people pay at the door to look at it; that money buys a better drill.
 

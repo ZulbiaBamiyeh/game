@@ -63,8 +63,11 @@
     $("tab-mus-n").textContent = S.collection.length ? "(" + S.collection.length + ")" : "";
 
     const h1 = document.querySelector(".topbar h1");
-    const title = "Deep Survey · " + S7.game.siteName(S);
-    if (h1.textContent !== title) h1.textContent = title;
+    /* The museum keeps its name; the field code only appears once you open a second site. */
+    const title = S.sites > 1
+      ? "The Hollow Museum · " + S7.game.siteName(S)
+      : "The Hollow Museum";
+    if (h1 && h1.textContent !== title) h1.textContent = title;
 
     const clock = $("s-clock");
     if (clock) {

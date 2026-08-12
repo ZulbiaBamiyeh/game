@@ -239,7 +239,7 @@
     if (sv.rating < 55) return "Nationally significant. There is a queue at opening.";
     if (sv.rating < 70) return "One of the great collections. Scholars book months ahead.";
     if (sv.rating < 85) return "People fly here for this. The deep gallery is never empty.";
-    return "There is nothing else like it, because there is nowhere else like Site 7.";
+    return "There is nothing else like it. The Hollow Museum is the only place this sequence is known.";
   }
 
   /* Culture set completion — the long-tail collection goal. */

@@ -3,8 +3,8 @@
 
    The intro, the framing, and the closing note. The premise in one line:
 
-     Site 7 is not a site. It is a collection, buried in order, by someone who
-     knew who would dig it up.
+     Holloway Field is not a site. It is a collection, buried in order, by
+     someone who knew who would dig it up.
 
    Everything the game does mechanically — depth as chronology, one culture per
    band, artifacts that are never sold — falls out of that one idea.
@@ -16,7 +16,7 @@
     {
       html:
         '<div class="inst">Institute for Regional Antiquities</div>' +
-        '<p class="bigt">Site 7</p>' +
+        '<p class="bigt">The Hollow Museum</p>' +
         '<p class="memo">A LIDAR survey of this field turned up something odd: a patch of loose, ' +
         'buried fill going down a long way, in a spot with no recorded history and nothing on the ' +
         'surface to explain it. That was enough for the Institute to fund a proper dig — and enough ' +
@@ -58,7 +58,7 @@
 
   /* Shown once, when the last keystone is accessioned. */
   const ENDING =
-    '<div class="lbl">Closing note, Site 7</div>' +
+    '<div class="lbl">Closing note, The Hollow Museum</div>' +
     '<p class="memo">Eight hundred and twelve metres. The fill stops. Below it is bedrock that ' +
     'has not been disturbed in ninety million years, and set into the top of it, upright, is a ' +
     'survey marker of a pattern this institute adopted in 1974.</p>' +
@@ -71,7 +71,7 @@
     'stamped the bottom of it with the next accession number in our own sequence.</p>' +
     '<p class="memo">They were not hiding it. They were <b>accessioning</b> it. And they knew ' +
     'which institute would be doing the lifting.</p>' +
-    '<p class="memo">Site 3 has been reported. The geophysics there came back the same way.</p>';
+    '<p class="memo">East Marrow has been reported. The geophysics there came back the same way.</p>';
 
   /* Small headers shown over the shaft as the drill passes through each band. */
   const ERA_NOTE = {

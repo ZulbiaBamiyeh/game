@@ -169,8 +169,10 @@
      new site resets depth and every piece of site equipment, keeps the whole
      collection, the museum, and the research, and pays a standing bonus. */
 
-  const SITE_NAMES = ["Site 7", "Site 3", "Site 12", "Site 22", "Site 41",
-                      "Site 58", "Site 90", "Site 114"];
+  /* Field codes under the Institute. The museum is always The Hollow Museum;
+     these are the shafts that feed it. */
+  const SITE_NAMES = ["Holloway Field", "East Marrow", "Lower Reach", "Black Fen", "Cold Spit",
+                      "High Warren", "Old Quarry Lea", "South Hollow"];
 
   const siteName = (S) => SITE_NAMES[Math.min(SITE_NAMES.length - 1, (S.sites || 1) - 1)] +
     ((S.sites || 1) > SITE_NAMES.length ? " (" + S.sites + ")" : "");
