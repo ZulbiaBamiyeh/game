@@ -311,10 +311,36 @@
         '<div class="sbar"><i style="width:' + pc + '%"></i></div></div>';
     }).join("") || (setsHtml ? "" : '<p class="hint">Nothing accessioned yet.</p>');
     $("sets").innerHTML = setsHtml;
-    const note = document.querySelector("#v-museum .panel:last-child .lblnote");
+    const setsPanel = $("sets") && $("sets").closest(".panel");
+    const note = setsPanel && setsPanel.querySelector(".lblnote");
     if (note) note.textContent = remaining
       ? remaining + " tradition" + (remaining === 1 ? "" : "s") + " still unencountered"
       : "every tradition encountered";
+
+    renderReviews(S, sv);
+  }
+
+  function renderReviews(S, sv) {
+    const box = $("m-reviews");
+    const note = $("reviews-note");
+    if (!box || !S7.reviews) return;
+    if (sv.count === 0) {
+      box.innerHTML = '<p class="hint">No visitors yet — no reviews. Put something on display and open the doors.</p>';
+      if (note) note.textContent = "waiting for the first guest";
+      return;
+    }
+    const list = S7.reviews.pick(sv.rating, S.day, 4);
+    const band = S7.reviews.bandFor(sv.rating);
+    if (note) note.textContent = band.tag + " · guest book, day " + S.day;
+    box.innerHTML = list.map((r) =>
+      '<blockquote class="review">' +
+        '<div class="review-top">' +
+          '<span class="review-stars">' + S7.reviews.starString(r.stars) + "</span>" +
+          '<cite class="review-name">' + esc(r.name) + "</cite>" +
+        "</div>" +
+        '<p class="review-text">“' + esc(r.text) + '”</p>' +
+      "</blockquote>"
+    ).join("");
   }
 
   /* ---------- the till ------------------------------------------------------

@@ -410,6 +410,38 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .setrow .sbar>i{display:block;height:100%;background:var(--ochre-2)}
 .setrow.locked{opacity:.4}
 
+/* ---------- visitor reviews ----------------------------------------------- */
+
+.reviews-panel{margin-top:2px}
+.reviews{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:10px;
+}
+.review{
+  margin:0;
+  padding:12px 13px 11px;
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  border-left:3px solid var(--ochre-2);
+  box-shadow:var(--shadow);
+}
+.review-top{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin-bottom:7px;
+}
+.review-stars{
+  color:var(--ochre);font-size:12px;letter-spacing:.08em;line-height:1;
+}
+.review-name{
+  font-style:normal;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);text-align:right;
+}
+.review-text{
+  font-family:var(--prose);font-size:13px;line-height:1.55;color:var(--ink);
+  margin:0;
+}
+
 /* ---------- fields / records ---------------------------------------------- */
 
 .rec{border:1px solid var(--line);background:var(--panel-2);padding:14px 15px;margin-bottom:10px}
