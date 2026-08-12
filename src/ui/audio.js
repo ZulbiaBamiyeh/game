@@ -1,27 +1,45 @@
 /* ============================================================================
-   MUSEUM AMBIENCE
+   AMBIENCE
 
    Everything else in this game is generated rather than shipped, so the
-   music is too: a soft generative drone-and-pad loop built from oscillators
-   and a synthesised reverb impulse, no audio files anywhere. It plays while
-   the Museum tab is open and fades out everywhere else, on the theory that
-   the shaft should be quiet and the galleries should not.
+   music is too: soft generative loops built from oscillators and a
+   synthesised reverb impulse, no audio files anywhere. Each tab has its own
+   character — the shaft is low and a little tense, the museum is warm and
+   spacious, research is brighter and more studious — and switching tabs
+   glides between them rather than cutting.
    ============================================================================ */
 (function (S7) {
   "use strict";
 
   const MUTE_KEY = "s7-audio-muted";
 
-  /* D dorian-ish, kept sparse so nothing ever sounds like a wrong note. */
-  const SCALE = [0, 2, 3, 7, 9, 12, 14];
-  const ROOT = 38; /* D2 */
+  /* Each zone: a root note (MIDI), a scale (semitone offsets), a filter
+     cutoff for its mood, and rough timing for how often the pad and the
+     chime speak. Kept sparse throughout so nothing ever lands on a wrong
+     note no matter which two zones a crossfade catches mid-chord. */
+  const ZONES = {
+    site: {
+      root: 33, scale: [0, 2, 3, 5, 7, 8, 10], filterHz: 850,
+      pad: [4500, 8000], chime: [12000, 19000], chimeChance: 0.35,
+    },
+    museum: {
+      root: 38, scale: [0, 2, 3, 7, 9, 12, 14], filterHz: 1500,
+      pad: [3500, 7000], chime: [9000, 21000], chimeChance: 0.7,
+    },
+    research: {
+      root: 43, scale: [0, 2, 4, 7, 9, 11, 12], filterHz: 2000,
+      pad: [3000, 6000], chime: [7000, 15000], chimeChance: 0.55,
+    },
+  };
 
   let ctx = null, master = null, filter = null, reverb = null;
-  let started = false, enabled = true, inMuseum = false;
+  let droneGain = null, droneOsc = [];
+  let started = false, enabled = true, zone = null;
   let padTimer = null, chimeTimer = null;
 
   const midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
   const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const zoneCfg = () => ZONES[zone];
 
   /* A cheap algorithmic reverb: exponentially decaying noise, no IR file. */
   function makeReverb(seconds, decay) {
@@ -43,29 +61,46 @@
   }
 
   function startDrone() {
-    const g = ctx.createGain();
-    g.gain.value = 0.05;
-    voiceOut(g);
-    [ROOT, ROOT + 7].forEach((note, i) => {
+    droneGain = ctx.createGain();
+    droneGain.gain.value = 0.06;
+    voiceOut(droneGain);
+    const cfg = zoneCfg() || ZONES.site;
+    droneOsc = [cfg.root, cfg.root + 7].map((note, i) => {
       const o = ctx.createOscillator();
       o.type = "sine";
       o.frequency.value = midiToFreq(note);
       o.detune.value = (i - 0.5) * 6;
-      o.connect(g);
+      o.connect(droneGain);
       o.start();
+      return o;
+    });
+  }
+
+  /* Glides the drone and the filter to the new zone's register and mood
+     instead of cutting, so moving between tabs feels like walking from one
+     room into another rather than switching a track. */
+  function glideTo(cfg) {
+    const now = ctx.currentTime;
+    filter.frequency.cancelScheduledValues(now);
+    filter.frequency.setTargetAtTime(cfg.filterHz, now, 1.4);
+    const notes = [cfg.root, cfg.root + 7];
+    droneOsc.forEach((o, i) => {
+      o.frequency.cancelScheduledValues(now);
+      o.frequency.setTargetAtTime(midiToFreq(notes[i]), now, 1.8);
     });
   }
 
   function playPad() {
-    if (!ctx) return;
-    const freq = midiToFreq(ROOT + 12 + pick(SCALE));
+    if (!ctx || !zone) return;
+    const cfg = zoneCfg();
+    const freq = midiToFreq(cfg.root + 12 + pick(cfg.scale));
     const now = ctx.currentTime;
     const o = ctx.createOscillator();
     o.type = Math.random() < 0.5 ? "triangle" : "sine";
     o.frequency.value = freq;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(0.055, now + 2.2);
+    g.gain.linearRampToValueAtTime(0.06, now + 2.2);
     g.gain.linearRampToValueAtTime(0, now + 7);
     o.connect(g);
     voiceOut(g);
@@ -74,19 +109,21 @@
   }
 
   function schedulePad() {
-    if (enabled && inMuseum) playPad();
-    padTimer = setTimeout(schedulePad, 3500 + Math.random() * 3500);
+    if (enabled && zone) playPad();
+    const cfg = zoneCfg() || ZONES.museum;
+    padTimer = setTimeout(schedulePad, cfg.pad[0] + Math.random() * (cfg.pad[1] - cfg.pad[0]));
   }
 
   function playChime() {
-    if (!ctx) return;
-    const freq = midiToFreq(ROOT + 24 + pick(SCALE));
+    if (!ctx || !zone) return;
+    const cfg = zoneCfg();
+    const freq = midiToFreq(cfg.root + 24 + pick(cfg.scale));
     const now = ctx.currentTime;
     const o = ctx.createOscillator();
     o.type = "sine";
     o.frequency.value = freq;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.045, now);
+    g.gain.setValueAtTime(0.05, now);
     g.gain.exponentialRampToValueAtTime(0.0001, now + 3.2);
     o.connect(g);
     if (ctx.createStereoPanner) {
@@ -103,8 +140,10 @@
   }
 
   function scheduleChime() {
-    if (enabled && inMuseum && Math.random() < 0.7) playChime();
-    chimeTimer = setTimeout(scheduleChime, 9000 + Math.random() * 12000);
+    const cfg = zoneCfg();
+    if (enabled && zone && cfg && Math.random() < cfg.chimeChance) playChime();
+    const c = cfg || ZONES.museum;
+    chimeTimer = setTimeout(scheduleChime, c.chime[0] + Math.random() * (c.chime[1] - c.chime[0]));
   }
 
   function ensureCtx() {
@@ -119,7 +158,7 @@
 
     filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 1500;
+    filter.frequency.value = (zoneCfg() || ZONES.site).filterHz;
     filter.connect(master);
 
     reverb = makeReverb(3.2, 2.6);
@@ -135,7 +174,7 @@
 
   function updateMasterGain() {
     if (!ctx) return;
-    const target = enabled && inMuseum ? 0.5 : 0;
+    const target = enabled && zone ? 0.55 : 0;
     master.gain.cancelScheduledValues(ctx.currentTime);
     master.gain.setTargetAtTime(target, ctx.currentTime, 1.2);
   }
@@ -148,15 +187,15 @@
     updateMasterGain();
   }
 
-  function enterMuseum() {
-    inMuseum = true;
-    if (ctx && ctx.state === "suspended") ctx.resume();
-    updateMasterGain();
-  }
-
-  function leaveMuseum() {
-    inMuseum = false;
-    updateMasterGain();
+  /* `z` is "site" | "museum" | "research" | null (the log tab, which stays quiet). */
+  function setZone(z) {
+    const cfg = ZONES[z] || null;
+    zone = cfg ? z : null;
+    if (ctx) {
+      if (ctx.state === "suspended") ctx.resume();
+      if (cfg) glideTo(cfg);
+      updateMasterGain();
+    }
   }
 
   function setEnabled(on) {
@@ -176,5 +215,9 @@
     });
   }
 
-  S7.audio = { init, enterMuseum, leaveMuseum, setEnabled, isEnabled };
+  S7.audio = {
+    init, setZone, setEnabled, isEnabled,
+    debug: () => ({ started, hasCtx: !!ctx, state: ctx && ctx.state,
+                     gain: master && master.gain.value, zone, enabled }),
+  };
 })(window.S7 = window.S7 || {});

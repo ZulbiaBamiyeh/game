@@ -49,6 +49,21 @@
      curator wants it: `a.room` overrides its era and `a.slot` its position.
      Slot widths come from the object's real size, so a colossal head gets a
      bay of wall to itself and a bead does not. */
+  /* Amenity rooms bought with museum upgrades. They sit after the foyer so the
+     building actually grows when you spend money on it, instead of only the
+     numbers in the side panel moving. */
+  function amenityRoom(id, name, period, width, x, extra) {
+    const benches = [{
+      x: x + width / 2, y: BENCH_Y,
+      seats: [x + width / 2 - 13, x + width / 2, x + width / 2 + 13]
+        .map((sxx) => ({ x: sxx, taken: null })),
+    }];
+    return Object.assign({
+      era: { id, name, period },
+      x, width, exhibits: [], items: [], benches, amenity: id,
+    }, extra || {});
+  }
+
   function layout(S) {
     const shown = S.collection.filter((a) => a.display !== false);
     const byEra = new Map();
@@ -58,21 +73,35 @@
       byEra.get(id).push(a);
     }
 
-    const eraById = {};
-    for (const e of S7.cultures.ERAS) eraById[e.id] = e;
+    const up = S.up || {};
+    const shopLvl = up.shop || 0;
+    const cafeLvl = up.cafe || 0;
+    const wingLvl = up.wing || 0;
+    const deepLvl = up.deepgal || 0;
+
+    /* Gift shop claims a bay of the entrance hall, so the foyer stretches. */
+    const foyerW = FOYER_W + (shopLvl > 0 ? 70 + Math.min(4, shopLvl) * 8 : 0);
 
     const rooms = [];
     /* Room zero is always the entrance hall. It has no exhibits; it has a desk. */
     rooms.push({
       era: { id: "foyer", name: "Entrance hall", period: "admissions and cloakroom" },
-      x: 0, width: FOYER_W, exhibits: [], items: [], benches: [
-        { x: FOYER_W - 40, y: BENCH_Y,
-          seats: [FOYER_W - 53, FOYER_W - 40, FOYER_W - 27].map((sxx) => ({ x: sxx, taken: null })) },
+      x: 0, width: foyerW, exhibits: [], items: [], benches: [
+        { x: foyerW - 40, y: BENCH_Y,
+          seats: [foyerW - 53, foyerW - 40, foyerW - 27].map((sxx) => ({ x: sxx, taken: null })) },
       ],
       foyer: true, doorX: DOOR_X, deskX: DESK_X, deskW: DESK_W,
+      shop: shopLvl,
     });
 
-    let x = FOYER_W + DOOR;
+    let x = foyerW + DOOR;
+
+    if (cafeLvl > 0) {
+      const cw = 160 + Math.min(6, cafeLvl) * 10;
+      rooms.push(amenityRoom("cafe", "Café", "tea and cake", cw, x, { cafe: cafeLvl }));
+      x += cw + DOOR;
+    }
+
     for (const era of S7.cultures.ERAS) {
       const items = byEra.get(era.id);
       if (!items) continue;
@@ -88,7 +117,9 @@
         exhibits.push({ a, x: cx + phys.w / 2, w: phys.w, h: phys.h, mount, index: i, phys });
         cx += phys.w;
       }
-      const width = Math.max(MIN_ROOM, cx - x + ROOM_PAD);
+      /* Wings buy floor area: each level lets galleries breathe a little. */
+      const wingPad = wingLvl > 0 ? 12 + Math.min(8, wingLvl) * 6 : 0;
+      const width = Math.max(MIN_ROOM + wingPad, cx - x + ROOM_PAD + wingPad);
 
       /* One bench per stretch of room, dropped in the widest gap between
          exhibits so nobody has to sit inside a display case. */
@@ -106,6 +137,29 @@
       x += width + DOOR;
     }
 
+    /* New wings open as empty rooms at the end of the run, so the strip
+       lengthens when the trustees are persuaded. */
+    for (let w = 0; w < Math.min(4, wingLvl); w++) {
+      const ww = 180 + w * 20;
+      rooms.push(amenityRoom(
+        "wing" + w,
+        w === 0 ? "East wing" : w === 1 ? "West wing" : "New wing " + (w + 1),
+        "recently opened",
+        ww, x, { wing: true, wingIndex: w }));
+      x += ww + DOOR;
+    }
+
+    if (deepLvl > 0) {
+      const dw = 200 + Math.min(6, deepLvl) * 12;
+      rooms.push(amenityRoom(
+        "deepgal", "The deep gallery", "low light · thick glass",
+        dw, x, { deepgal: deepLvl }));
+      x += dw + DOOR;
+    }
+
+    if (!rooms.length) {
+      return { rooms: [], exhibits: [], benches: [], total: VIEW_FALLBACK, H, FLOOR_Y };
+    }
     const total = rooms[rooms.length - 1].x + rooms[rooms.length - 1].width;
     const exhibits = [], benches = [];
     for (const r of rooms) {
@@ -114,6 +168,8 @@
     }
     return { rooms, exhibits, benches, total, H, FLOOR_Y };
   }
+
+  const VIEW_FALLBACK = 400;
 
   /* Reassigns an artifact to a room and a position, for drag-to-rearrange.
      Slots are renumbered from 0 so the ordering stays stable across saves. */
@@ -128,15 +184,21 @@
     invalidate();
   }
 
-  /* The layout is rebuilt only when the collection or what is on show changes.
-     Both the crowd and the renderer read the same cached object, so an agent's
-     target is always the exhibit the renderer will draw. */
+  /* The layout is rebuilt only when the collection, what is on show, or the
+     amenity upgrades that add rooms change. Both the crowd and the renderer
+     read the same cached object, so an agent's target is always the exhibit
+     the renderer will draw. */
   let cache = null, cacheKey = "";
 
   function getLayout(S) {
     let shown = 0;
     for (const a of S.collection) if (a.display !== false) shown++;
-    const key = S.collection.length + ":" + shown;
+    const u = S.up || {};
+    const key = S.collection.length + ":" + shown +
+      ":s" + (u.shop || 0) +
+      ":c" + (u.cafe || 0) +
+      ":w" + (u.wing || 0) +
+      ":d" + (u.deepgal || 0);
     if (key !== cacheKey) { cacheKey = key; cache = layout(S); }
     return cache;
   }

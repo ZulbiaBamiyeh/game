@@ -53,7 +53,7 @@
       b.classList.toggle("on", b.getAttribute("data-tab") === name);
     for (const id of ["site", "museum", "research", "log"])
       show("v-" + id, id === name);
-    if (name === "museum") S7.audio.enterMuseum(); else S7.audio.leaveMuseum();
+    S7.audio.setZone(name === "log" ? null : name);
     refreshAll();
   }
 
@@ -76,6 +76,10 @@
     S.funds -= cost;
     S.up[id] = (S.up[id] || 0) + 1;
     if (u.eff) u.eff(S);
+    /* Museum amenity purchases change the floor plan; force a rebuild so the
+       café, wing, or gift shop appears on the next frame rather than after a
+       rehang. */
+    if (S7.upgrades.MUSEUM.some((m) => m.id === id)) S7.galleryView.invalidate();
     G.log(S, u.name + " — level " + S.up[id] + ".");
     refreshAll();
   }
@@ -382,7 +386,8 @@
 
     if (S.tab === "site") {
       if (S.active) S7.digView.draw(S, dt);
-      else S7.shaftView.draw(S);
+      else S7.shaftView.draw(S, dt);
+      show("shaft-recenter", !S.active && S7.shaftView.isPanned());
     } else if (S.tab === "museum") {
       /* The crowd only exists while you are looking at it. Nobody is
          simulating footsteps behind the Research tab. */
@@ -457,6 +462,7 @@
       refreshAll();
     });
     $("o-ok").addEventListener("click", () => show("m-offline", false));
+    $("shaft-recenter").addEventListener("click", () => S7.shaftView.recenter());
     $("gal-prev").addEventListener("click", () => S7.galleryView.nudge(-1));
     $("gal-next").addEventListener("click", () => S7.galleryView.nudge(1));
     $("gal-arrange").addEventListener("click", () => {

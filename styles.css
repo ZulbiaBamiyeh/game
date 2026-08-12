@@ -141,6 +141,7 @@ main{padding:14px}
 .canvaswrap{position:relative;line-height:0}
 #c-shaft,#c-dig{max-height:66vh;margin:0 auto}
 canvas{display:block;width:100%;height:auto;image-rendering:pixelated;touch-action:manipulation}
+#c-shaft{touch-action:none;cursor:grab}
 #c-dig{cursor:crosshair}
 .stage-foot{
   position:absolute;left:0;right:0;bottom:0;padding:8px 11px;
@@ -236,6 +237,11 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .galnav:hover{background:rgba(42,35,22,.95);border-color:var(--ochre-2)}
 .galnav.l{left:6px}
 .galnav.r{right:6px}
+.shaftrecenter{
+  position:absolute;top:auto;bottom:8px;left:50%;transform:translateX(-50%);
+  width:auto;height:auto;font:10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  padding:6px 10px;
+}
 .galbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:8px}
 .galroom{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

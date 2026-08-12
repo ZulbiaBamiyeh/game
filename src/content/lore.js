@@ -17,49 +17,42 @@
       html:
         '<div class="inst">Institute for Regional Antiquities</div>' +
         '<p class="bigt">Site 7</p>' +
-        '<p class="memo">A field seven miles from anywhere, on land nobody wanted, with no ' +
-        'recorded finds in two centuries of ploughing. It is not a prestigious posting. ' +
-        'It was assigned to you because the equipment happened to be free.</p>' +
-        '<p class="memo">You have a drill, one digger, a shed, and a room in town that the ' +
-        'Institute is calling a museum.</p>',
-      cta: "Read the terms",
+        '<p class="memo">A LIDAR survey of this field turned up something odd: a patch of loose, ' +
+        'buried fill going down a long way, in a spot with no recorded history and nothing on the ' +
+        'surface to explain it. That was enough for the Institute to fund a proper dig — and enough ' +
+        'to get you the job running it.</p>' +
+        '<p class="memo">You have got a drill, one digger, a shed, and a small room in town that is ' +
+        'going to be the museum.</p>',
+      cta: "How this works",
     },
     {
       html:
-        '<div class="lbl">Terms of the survey</div>' +
-        '<p class="memo">The Institute does not sell material and neither do you. Everything ' +
-        'recovered is accessioned, catalogued, and — if it is worth looking at — put on ' +
-        'display.</p>' +
-        '<p class="memo"><b>The museum is the budget.</b> People pay to come in. At first there ' +
-        'will not be many, because at first there is nothing to see. As the collection grows, ' +
-        'so does the rating, and so do the visitors, and so does the money you have to spend ' +
-        'on getting deeper.</p>' +
-        '<p class="memo">Depth costs money. Money comes from the door.</p>',
-      cta: "Read the method",
+        '<div class="lbl">How this works</div>' +
+        '<p class="memo">Nothing you dig up gets sold. Everything is catalogued, and if it is worth ' +
+        'looking at, it goes on display.</p>' +
+        '<p class="memo"><b>The museum pays for the dig.</b> Visitors buy tickets, ticket money buys ' +
+        'better equipment, better equipment gets you deeper. There will not be much to see at first, ' +
+        'so there will not be many visitors — that changes fast once the collection grows.</p>',
+      cta: "One more thing",
     },
     {
       html:
-        '<div class="lbl">A note on method</div>' +
-        '<p class="memo">Every object you study teaches the crew something, and it keeps ' +
-        'teaching it for the rest of the survey. What it teaches is not up to you — you find ' +
-        'out when you lift it.</p>' +
-        '<p class="memo">You will also be asked to interpret finds <b>before</b> they are fully ' +
-        'exposed. Commit early and a correct reading is worth four times as much Understanding. ' +
-        'Commit late and it is worth almost nothing, because by then anyone could have told ' +
-        'you.</p>' +
-        '<p class="memo">The record keeps whichever answer you gave.</p>',
-      cta: "Read the brief",
+        '<div class="lbl">Reading a find</div>' +
+        '<p class="memo">Studying an object teaches your crew something permanent, and you will not ' +
+        'know what until you have lifted it.</p>' +
+        '<p class="memo">You can also guess what a find is before it is fully uncovered. Guess early ' +
+        'and get it right and it is worth a lot more than waiting until it is obvious to everyone.</p>',
+      cta: "Almost there",
     },
     {
       html:
-        '<div class="lbl">One thing before you start</div>' +
-        '<p class="memo">The geophysics came back wrong and was rerun twice. There is between ' +
-        'six hundred and nine hundred metres of unconsolidated fill under this field. There is ' +
-        'no basin here. There is no fault, no sinkhole, no quarry, no river.</p>' +
-        '<p class="memo">Fill that deep does not happen. Somebody put it there.</p>' +
-        '<p class="memo">Find out who, and why, and — this is the part the Institute has not ' +
-        'asked about — <b>find out what order they put it in.</b></p>',
-      cta: "Open the shaft",
+        '<div class="lbl">Before you start</div>' +
+        '<p class="memo">The survey puts somewhere between six hundred and nine hundred metres of ' +
+        'loose fill under this field. That should not be possible — there is no basin here, no ' +
+        'fault, no old quarry, nothing that explains ground like that.</p>' +
+        '<p class="memo">Someone put it there. Find out who, and why — and keep an eye on the order ' +
+        'things come up in. It might matter.</p>',
+      cta: "Start digging",
     },
   ];
 

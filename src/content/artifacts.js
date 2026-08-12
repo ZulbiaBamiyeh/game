@@ -87,12 +87,12 @@
 
   const NOTE_KIND = {
     object: [
-      "Recorded in situ before lifting. Nothing about the surrounding matrix is remarkable.",
-      "Lifted whole. The soil came away cleanly, which usually means it was placed rather than dropped.",
-      "One of a small scatter at this depth, all of a type, all facing the same way.",
-      "The wear is consistent with use, and then it stops. Whatever ended its working life ended it abruptly.",
-      "Tool marks survive across the whole surface without a break — one hand, one sitting.",
-      "The manufacture is competent and unhurried. Somebody had time.",
+      "Recorded in place before it was lifted.",
+      "Come out of undisturbed ground, in one piece.",
+      "Recovered along with a few others of the same kind.",
+      "Shows the ordinary wear of having been used, nothing more.",
+      "No maker's mark, but the work is not in question.",
+      "A common type. There are others like it in the collection.",
     ],
     painting: [
       "Lifted on a plaster backing. The pigment is stable and has not been consolidated.",
@@ -115,9 +115,9 @@
   const NOTE_EERIE = [
     /* 0 — ordinary */
     [
-      "Filed without comment.",
-      "Nothing in the context contradicts the attribution.",
-      "Consistent with the rest of the horizon.",
+      "Nothing else to note.",
+      "An unremarkable find, in the best sense.",
+      "Fits comfortably with everything else from this level.",
     ],
     /* 1 — a detail that will not sit still */
     [
@@ -172,9 +172,12 @@
               "Pigment sits directly on the ground layer with no size between them.",
               "Applied wet into wet, which means it was finished in one working.",
               "The support is sound. Nothing has been consolidated or relined."],
-    other: ["Retained for further analysis.",
-            "Photographed and recorded before lifting.",
-            "Catalogued from the field. The full record will follow."],
+    synthetic: ["The plastic has kept its shape well.",
+                "Moulding seams are still visible on the casing.",
+                "The colour has barely faded."],
+    other: ["In good enough condition to show as found.",
+            "Nothing unusual about the material.",
+            "A straightforward piece to catalogue."],
   };
 
   /* What a painting is actually on. "Paper" for a Roman fresco and a Song
@@ -200,6 +203,7 @@
     canvas: "pigment", panel: "pigment", printpaper: "pigment", barkpaper: "pigment",
     vellum: "pigment", silk: "pigment", plank: "pigment", plaster: "pigment",
     rockface: "pigment", unknownpig: "pigment", tile: "ceramic", vasefabric: "ceramic",
+    plastic: "synthetic", lcd: "synthetic",
   };
 
   const MATERIAL_LABEL = {

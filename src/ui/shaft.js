@@ -21,6 +21,17 @@
   let canvas, ctx, buf, bufCtx, bufImg, bufPix;
   const RGB = {};
 
+  /* ---------- vertical pan --------------------------------------------------
+     The view normally tracks the drill. Dragging or scrolling the shaft lets
+     you look up toward the surface or down past the cutting face — mostly so
+     four hundred metres of descent actually feels like four hundred metres —
+     and it glides back to following the drill only when asked to. */
+  let panRows = 0, panTarget = 0;
+  let dragging = false, dragY = 0, dragPan = 0, dragMoved = 0;
+
+  const isPanned = () => Math.abs(panTarget) > 1.5;
+  const recenter = () => { panTarget = 0; };
+
   function init(el) {
     canvas = el;
     /* Size the element from the renderer's own numbers. Keeping these in the
@@ -36,6 +47,36 @@
     bufPix = new Uint32Array(bufImg.data.buffer);
     for (const k in R.RAMP)
       RGB[k] = R.RAMP[k].map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+
+    const localY = (e) => {
+      const r = canvas.getBoundingClientRect();
+      return (e.clientY - r.top) * (canvas.height / r.height);
+    };
+    canvas.addEventListener("pointerdown", (e) => {
+      dragging = true; dragMoved = 0;
+      dragY = localY(e); dragPan = panTarget;
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = "grabbing";
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dy = (localY(e) - dragY) / BS;
+      dragMoved = Math.max(dragMoved, Math.abs(dy));
+      panRows = panTarget = dragPan - dy;
+    });
+    const release = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      canvas.style.cursor = "grab";
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* gone */ }
+    };
+    canvas.addEventListener("pointerup", release);
+    canvas.addEventListener("pointercancel", release);
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      panTarget -= e.deltaY * 0.05;
+    }, { passive: false });
+    canvas.style.cursor = "grab";
   }
 
   const px32 = (r, g, b) => (255 << 24) | (b << 16) | (g << 8) | r;
@@ -92,9 +133,15 @@
 
   /* ---------- the frame --------------------------------------------------- */
 
-  function draw(S) {
+  function draw(S, dt) {
     const drillRow = Math.floor(S.depth / MPP);
-    const rowOff = Math.max(0, drillRow - Math.floor(BH * 0.62));
+    const followRow = Math.max(0, drillRow - Math.floor(BH * 0.62));
+    const maxOff = Math.max(0, Math.ceil(C.MAX_DEPTH / MPP) - BH + 8);
+    const lo = -followRow, hi = maxOff - followRow;
+    if (!dragging) panRows += (panTarget - panRows) * Math.min(1, (dt || 0.05) * 8);
+    panRows = Math.max(lo, Math.min(hi, panRows));
+    panTarget = Math.max(lo, Math.min(hi, panTarget));
+    const rowOff = Math.round(followRow + panRows);
     const phase = Math.floor(performance.now() / 70);
     const eraSeed = 11;
 
@@ -282,5 +329,5 @@
     ctx.fillRect(0, 0, BW * BS, BH * BS);
   }
 
-  S7.shaftView = { init, draw, BW, BH, BS, MPP };
+  S7.shaftView = { init, draw, BW, BH, BS, MPP, isPanned, recenter };
 })(window.S7 = window.S7 || {});
