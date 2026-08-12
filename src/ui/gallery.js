@@ -853,28 +853,33 @@
   /* A soft cone from the track, plus the pool it throws on the floor.
      Lighting upgrades raise the pool and the cone together — the first few
      purchases are the difference between a shed and a museum. */
-  function spotlight(wx, top, bottom) {
+  /* Spotlight/cone take world Y. Pass floor base so basement lights sit on the
+     right floor, not at ground-level coordinates. */
+  function spotlight(wx, top, bottom, floorBase) {
+    const base = floorBase || 0;
     const light = fac ? fac.lighting : 0;
     const poolA = 0.05 + Math.min(0.22, light * 0.018);
     const poolR = 36 + light * 2;
-    const pool = ctx.createRadialGradient(sx(wx), sy(FLOOR_Y + 14), 2, sx(wx), sy(FLOOR_Y + 14), poolR);
+    const fy = base + FLOOR_Y;
+    const pool = ctx.createRadialGradient(sx(wx), sy(fy + 14), 2, sx(wx), sy(fy + 14), poolR);
     pool.addColorStop(0, "rgba(255,226,166," + poolA.toFixed(3) + ")");
     pool.addColorStop(1, "rgba(255,222,150,0)");
     ctx.fillStyle = pool;
-    ctx.fillRect(sx(wx) - 46, sy(FLOOR_Y), 92, (V.H - FLOOR_Y) * SCALE);
-    cone(wx, top, bottom);
+    ctx.fillRect(sx(wx) - 46, sy(fy), 92, (V.H - FLOOR_Y) * SCALE);
+    cone(wx, top, bottom, base);
   }
 
-  function cone(wx, top, bottom) {
+  function cone(wx, top, bottom, floorBase) {
+    const base = floorBase || 0;
     const light = fac ? fac.lighting : 0;
     const a = 0.04 + Math.min(0.16, light * 0.014);
-    const g = ctx.createLinearGradient(0, sy(WALL_TOP), 0, sy(bottom));
+    const g = ctx.createLinearGradient(0, sy(base + WALL_TOP), 0, sy(bottom));
     g.addColorStop(0, "rgba(255,222,150," + a.toFixed(3) + ")");
     g.addColorStop(1, "rgba(255,222,150,0)");
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.moveTo(sx(wx - 3), sy(WALL_TOP));
-    ctx.lineTo(sx(wx + 3), sy(WALL_TOP));
+    ctx.moveTo(sx(wx - 3), sy(base + WALL_TOP));
+    ctx.lineTo(sx(wx + 3), sy(base + WALL_TOP));
     ctx.lineTo(sx(wx + 22 + light), sy(bottom));
     ctx.lineTo(sx(wx - 22 - light), sy(bottom));
     ctx.closePath();
@@ -915,10 +920,15 @@
                : (hover && !hover.board && hover === e) ? "#c79a42" : null;
     const cases = fac ? fac.cases : 0;
     const plinths = fac ? fac.plinths : 0;
+    /* exhibitBox returns world Y (with floor base). Pedestals must use the
+       same world floor line — not bare FLOOR_Y — or basement cases stretch
+       upward into the ceiling. */
+    const base = b.base || 0;
+    const floorW = base + FLOOR_Y;
+    const railW = base + RAIL_Y;
 
     if (e.mount === "wall") {
-      spotlight(e.x, 30, b.y + b.h + 8);
-      /* Better lighting also buys a proper frame around wall pieces. */
+      spotlight(e.x, base + 30, b.y + b.h + 8, base);
       if ((fac ? fac.lighting : 0) >= 2 || cases >= 2) {
         rect(b.x - 2, b.y - 2, b.w + 4, b.h + 4, cases >= 4 ? "#2a2418" : "#1a160d");
         rect(b.x - 2, b.y - 2, b.w + 4, 1, "#8a6a2c");
@@ -928,27 +938,27 @@
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
       lightArt(b, aw, ah);
       if (ring) outlineBox(b, ring);
-      if (b.y > RAIL_Y + 2) rect(e.x - 1, RAIL_Y, 1, b.y - RAIL_Y, "#5a4e35");
+      if (b.y > railW + 2) rect(e.x - 1, railW, 1, b.y - railW, "#5a4e35");
     } else if (e.mount === "plinth") {
-      spotlight(e.x, 30, b.plinthTop);
+      const pTop = b.plinthTop;
+      const pH = Math.max(4, floorW + 8 - pTop);
+      spotlight(e.x, base + 30, pTop, base);
       const pw = Math.max(14, Math.round(b.w * 0.78));
-      /* No plinths bought yet: a packing crate. Commissioned ones look like
-         stone, and higher levels add a marble cap and proper rope. */
       if (plinths <= 0) {
-        rect(e.x - pw / 2, b.plinthTop, pw, FLOOR_Y + 8 - b.plinthTop, "#5a4a30");
-        rect(e.x - pw / 2, b.plinthTop, pw, 2, "#6b5a3a");
-        for (let y = b.plinthTop + 4; y < FLOOR_Y + 4; y += 5)
+        rect(e.x - pw / 2, pTop, pw, pH, "#5a4a30");
+        rect(e.x - pw / 2, pTop, pw, 2, "#6b5a3a");
+        for (let y = pTop + 4; y < floorW + 4; y += 5)
           rect(e.x - pw / 2 + 1, y, pw - 2, 1, "#4a3f28");
       } else {
         const body = plinths >= 4 ? "#6a6258" : C.plinth;
         const top = plinths >= 4 ? "#8a8274" : C.plinthTop;
         const shade = plinths >= 4 ? "#4a443c" : C.plinthShade;
-        rect(e.x - pw / 2, b.plinthTop, pw, FLOOR_Y + 8 - b.plinthTop, body);
-        rect(e.x - pw / 2, b.plinthTop, pw, 2, top);
-        rect(e.x + pw / 2 - 5, b.plinthTop + 2, 5, FLOOR_Y + 6 - b.plinthTop, shade);
+        rect(e.x - pw / 2, pTop, pw, pH, body);
+        rect(e.x - pw / 2, pTop, pw, 2, top);
+        rect(e.x + pw / 2 - 5, pTop + 2, 5, Math.max(2, pH - 2), shade);
         if (plinths >= 6) {
-          rect(e.x - pw / 2 - 1, b.plinthTop - 1, pw + 2, 1, "#a09a8a");
-          rect(e.x - pw / 2, b.plinthTop + 3, pw, 1, "#00000022");
+          rect(e.x - pw / 2 - 1, pTop - 1, pw + 2, 1, "#a09a8a");
+          rect(e.x - pw / 2, pTop + 3, pw, 1, "#00000022");
         }
       }
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
@@ -957,22 +967,23 @@
       if (plinths >= 1) {
         const rw = Math.max(pw + 8, 26);
         const ropeCol = plinths >= 5 ? "#c79a42" : C.rope;
-        rect(e.x - rw / 2, FLOOR_Y + 14, 1, 6, ropeCol);
-        rect(e.x + rw / 2, FLOOR_Y + 14, 1, 6, ropeCol);
-        rect(e.x - rw / 2, FLOOR_Y + 15, rw, 1, ropeCol);
+        rect(e.x - rw / 2, floorW + 14, 1, 6, ropeCol);
+        rect(e.x + rw / 2, floorW + 14, 1, 6, ropeCol);
+        rect(e.x - rw / 2, floorW + 15, rw, 1, ropeCol);
       }
     } else {
-      /* Objects: open shelf until cases are bought, then a real vitrine that
-         gets thicker glass and a darker frame as more cases arrive. */
+      /* Objects: open shelf until cases are bought, then a real vitrine. */
       const cw = Math.max(20, b.w + 10 + Math.min(6, cases));
       const pw = cw + 4;
       const glassTop = b.y - 7;
-      spotlight(e.x, 30, glassTop + 6);
+      const cBot = b.caseBottom;
+      const pedH = Math.max(4, floorW + 8 - cBot);
+      spotlight(e.x, base + 30, glassTop + 6, base);
 
-      rect(e.x - pw / 2, b.caseBottom, pw, FLOOR_Y + 8 - b.caseBottom, C.ped);
-      rect(e.x - pw / 2, b.caseBottom, pw, 2, C.pedTop);
-      rect(e.x + pw / 2 - 4, b.caseBottom + 2, 4, FLOOR_Y + 6 - b.caseBottom, C.pedShade);
-      rect(e.x - pw / 2, FLOOR_Y + 5, pw, 3, C.pedShade);
+      rect(e.x - pw / 2, cBot, pw, pedH, C.ped);
+      rect(e.x - pw / 2, cBot, pw, 2, C.pedTop);
+      rect(e.x + pw / 2 - 4, cBot + 2, 4, Math.max(2, pedH - 2), C.pedShade);
+      rect(e.x - pw / 2, floorW + 5, pw, 3, C.pedShade);
 
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
       lightArt(b, aw, ah);
@@ -980,22 +991,23 @@
       if (cases > 0) {
         const glassA = 0.10 + Math.min(0.16, cases * 0.008);
         const streakA = 0.22 + Math.min(0.25, cases * 0.015);
+        const glassH = Math.max(4, cBot - glassTop);
         ctx.globalAlpha = glassA;
-        rect(e.x - cw / 2, glassTop, cw, b.caseBottom - glassTop, C.caseGlass);
+        rect(e.x - cw / 2, glassTop, cw, glassH, C.caseGlass);
         ctx.globalAlpha = streakA;
-        rect(e.x - cw / 2 + 4, glassTop + 2, 2, b.caseBottom - glassTop - 4, "#ffffff");
+        rect(e.x - cw / 2 + 4, glassTop + 2, 2, Math.max(2, glassH - 4), "#ffffff");
         ctx.globalAlpha = 1;
         const frame = cases >= 6 ? "#1a160d" : C.caseFrame;
         const edge = cases >= 6 ? "#6a5c42" : C.caseEdge;
-        rect(e.x - cw / 2, glassTop, 1, b.caseBottom - glassTop, edge);
-        rect(e.x + cw / 2, glassTop, 1, b.caseBottom - glassTop, edge);
+        rect(e.x - cw / 2, glassTop, 1, glassH, edge);
+        rect(e.x + cw / 2, glassTop, 1, glassH, edge);
         rect(e.x - cw / 2, glassTop, cw, cases >= 3 ? 3 : 2, frame);
         rect(e.x - cw / 2, glassTop + 1, cw, 1, edge);
         if (cases >= 8) {
-          rect(e.x - cw / 2, b.caseBottom - 2, cw, 2, frame);
-          rect(e.x - 2, glassTop - 3, 4, 2, "#ffe6ad"); /* lock light */
+          rect(e.x - cw / 2, cBot - 2, cw, 2, frame);
+          rect(e.x - 2, glassTop - 3, 4, 2, "#ffe6ad");
         }
-        if (ring) outlineBox({ x: e.x - cw / 2, y: glassTop, w: cw, h: b.caseBottom - glassTop }, ring);
+        if (ring) outlineBox({ x: e.x - cw / 2, y: glassTop, w: cw, h: glassH }, ring);
       } else if (ring) {
         outlineBox(b, ring);
       }
