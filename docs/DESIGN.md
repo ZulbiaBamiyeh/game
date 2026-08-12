@@ -100,20 +100,55 @@ The economic engine. It is deliberately pathetic at the start — one room, four
 "no reason to visit twice" — and the climb out is the first hour of the game.
 
 ```
-significance ──▶ renown ──▶ visitors ──▶ spend ──▶ funding
+significance ──▶ renown ──▶ rating ──▶ footfall ──▶ the till ──▶ funding
 ```
 
+### The trading day
+
+The museum opens at **09:00** and closes at **17:00**. One museum minute is one real
+second, so a trading day is eight minutes of watching and the closed hours run at 16×
+— long enough that closing time means something, short enough that you are never
+waiting for the game.
+
+Footfall over the day is a curve, not a constant: quiet at opening, a long peak around
+half past one, a tail-off before close. It is normalised against its own mean, so the
+shape moves people around inside the day without changing the day's total.
+
+At 17:00 the book closes. The day's visitors, gate and secondary spend go into a
+fortnight of history, the best day is remembered, and the log gets a line.
+
+### Where the money comes from
+
+**Every pound is a person.** There is no income rate being integrated behind the
+scenes. Arrivals accumulate a fraction per tick; when the fraction crosses one, a
+visitor is admitted — the funds go up by the admission plus their secondary spend, the
+counter ticks, and a person is pushed through the street doors to walk to the desk and
+pay it. What the header calls income is that same figure differentiated for display.
+
 ```js
-sig      = Σ significance of everything on display
-crowd    = shown > cap ? (cap / shown) ^ 0.55 : 1
-breadth  = 1 + distinctCultures × 0.12
-variety  = 1 + distinctForms × 0.05 + distinctEras × 0.06
-renown   = sig^0.62 × breadth × variety × softCap(ratingMul, 25) × crowd
-rating   = 100 × renown / (renown + 6000)          // the 0–100 sign over the door
-visitors = (0.4 + renown × 1.1) × softCap(visitorMul, 40)      // per minute
-spend    = (1.1 + 0.04 × √sig) × softCap(spendMul, 20) × softCap(dwellMul, 6)
-income   = visitors/60 × spend + grant + flat
+sig       = Σ significance of everything on display
+crowd     = shown > cap ? (cap / shown) ^ 0.55 : 1
+breadth   = 1 + distinctCultures × 0.12
+variety   = 1 + distinctForms × 0.05 + distinctEras × 0.06
+renown    = sig^0.62 × breadth × variety × softCap(ratingMul, 25) × crowd
+rating    = 100 × renown / (renown + 6000)         // the 0–100 sign over the door
+
+suggested = max(2, round₂(2.5 + rating × 0.16))    // what you could fairly charge
+priceFac  = 1.55 / (1 + 0.55 × (price / suggested)^1.45)
+
+perDay    = 4200 × (rating/100)^1.25 × softCap(visitorMul, 2.6) × priceFac
+perMinute = perDay / 480 × shape(timeOfDay)
+spend     = (0.8 + 2.2 × rating/100) × softCap(spendMul, 2.4) × softCap(dwellMul, 1.5)
+take      = admission + spend                      // per person, at the door
 ```
+
+**Footfall hangs off the rating, not off renown, and that is the whole trick.** The
+rating already saturates towards 100, so the busiest possible day is a number a real
+museum could have. `PEAK_DAY = 4200` is what a rating-100 collection does at its
+suggested price; outreach can roughly treble it, which puts the absolute ceiling near
+eleven thousand a day. An earlier version hung footfall off `renown^0.92`, which is
+unbounded, and two hours of play reached 720,000 visitors a day. That is not a museum,
+it is a spreadsheet.
 
 `softCap(x, k) = kx / (k + x − 1)` — behaves like `x` while `x` is small and can never
 exceed `k`. **This is load-bearing.** Fourteen facility upgrade lines each multiplying
@@ -123,6 +158,32 @@ a superb café and three sherds is still a museum with three sherds.
 
 `breadth` is what stops the optimal play being forty of the same sherd. `crowd` is what
 makes display cases worth buying.
+
+### The price of a ticket
+
+The admission price is the only decision in the game that cuts both ways, and it is the
+player's. `suggested` is what a museum of this standing could fairly charge — £2.50 at
+the start, rising to about £18 for a world collection. Charge under it and footfall
+lifts; free entry is worth about a 55% lift. Charge over it and the gate thins; double
+the suggested price costs about 40% of it.
+
+Because secondary spend is per head and does not care what the ticket cost, a museum
+with a good café and shop genuinely can do better on a cheap ticket and a full house.
+The till panel shows the going rate, what your price is doing to footfall as a
+percentage, today's book, yesterday's, and a fortnight of bars.
+
+### What it is worth in real money
+
+| On display | Rating | Ticket | Visitors/day | A day's take |
+|---|---|---|---|---|
+| 1 | 0.2 | £2.50 | 1 | £5 |
+| 10 | 3.0 | £3.00 | 53 | £203 |
+| 40 | 14.3 | £5.00 | 369 | £2,258 |
+| 120 | 29.9 | £7.50 | 927 | £8,300 |
+| 260 | 44.3 | £9.50 | 1,516 | £17,091 |
+
+A village collection, a town museum, a county museum, a regional one, and something a
+coach party would detour for. `npm run smoke` prints this table on every run.
 
 ### Rating bands
 
@@ -179,16 +240,27 @@ number, and the caption bar under the floor fills in with condition, rarity,
 depth and the field notes. Double-click, or the button in the caption, opens the
 full record.
 
-**The crowd.** Visitors are pixel people generated from a seed like everything
-else, baked once into stand / four-frame walk / back-view. Seven archetypes —
-adult, child, tourist, scholar, school group, elder, staff — each with its own
-gait, dwell time, accessories and vocabulary. They walk in, pick an exhibit,
-stand and look at it, sometimes photograph it, sometimes talk about it, then move
-on or leave.
+**The entrance hall** is room zero, in front of every gallery. Street doors with
+the daylight coming through them and spilling across the parquet, a rope line, a
+leaflet rack, the admissions desk with a member of staff behind it, a card reader
+and a till. Arrivals come through the doors, take a ticket in the queue — ranked
+by arrival, not by where they are standing, or two who arrive in the same second
+both think they are first and walk into each other forever — reach the desk, pay,
+and a `+£4` floats off them and fades. Then they go and look at the art.
 
-Population is `2 + √(visitors per minute)`, capped at 42. Late on the museum is
-legitimately doing thousands a minute and forty-two people is as many as a room
-can read, so the header says "38 in view of 4.2k/min" rather than lying.
+**The crowd.** Visitors are pixel people generated from a seed like everything
+else, 18×24, baked once into a six-frame walk (contact, down, pass, ×2 — the
+shortest cycle that reads as weight moving rather than legs scissoring) plus
+poses for standing, looking, photographing, pointing, sitting and talking. Seven
+archetypes — adult, child, tourist, scholar, school group, elder, staff — each
+with its own gait, dwell time, accessories and vocabulary. Proportions carry the
+read at this size, not detail: shoulders are 8 pixels and the head is 5, because
+a head as wide as the body is a column, not a person.
+
+How many are in the building is `arrivals per minute × dwell minutes`, capped at
+42 — which is as many as a strip of rooms can legibly hold. A separation pass
+pushes people out of each other in both x and depth, so a popular exhibit gets a
+cluster rather than six sprites in one pixel.
 
 **What they say** is picked from weighted buckets, most specific first: the
 object's class, its specific type, its tradition, its condition, its rarity, and
@@ -235,17 +307,24 @@ Three separate bounds, each doing a different job:
 A greedy optimiser (buys everything the instant it is affordable, brushes and files
 perfectly), in real time:
 
-| Elapsed | Depth | Finds | Rating | Income |
-|---|---|---|---|---|
-| 1 min | 8 m | 1 | 0.1 | 0.45 /s |
-| 5 min | 28 m | 6 | 0.4 | 1.1 /s |
-| 15 min | 76 m | 15 | 8.9 | 405 /s |
-| 30 min | 568 m | 91 | 93.3 | 10.8 M/s |
-| 60 min | 830 m | 113 | 95.2 | 21.3 M/s |
+| Elapsed | Day | Depth | Finds | Rating | Ticket | Visitors/day | Income |
+|---|---|---|---|---|---|---|---|
+| 1 min | 1 | 8 m | 1 | 0.1 | £2.50 | 1 | £0.34 /s |
+| 5 min | 1 | 28 m | 6 | 0.3 | £2.50 | 3 | £0.47 /s |
+| 15 min | 2 | 69 m | 13 | 2.1 | £3.00 | 39 | £0.92 /s |
+| 30 min | 4 | 114 m | 20 | 6.7 | £3.50 | 185 | £3.62 /s |
+| 60 min | 7 | 209 m | 31 | 39.2 | £9.00 | 2,375 | £59.92 /s |
+| 120 min | 14 | 707 m | 91 | 92.7 | £17.50 | 9,653 | £797.57 /s |
 
-A human playing casually, with offline progress at half rate, takes several hours to
-the floor. `npm run smoke` prints this table on every run — it is the balance
-regression test.
+Two hours of *perfect* play does not quite reach the floor at 830 m, and the busiest
+day it ever sees is under ten thousand — a number the Louvre would recognise. A human
+playing casually, with offline progress at half rate, takes several sessions.
+
+`npm run smoke` prints this table on every run and **fails the build** if any row goes
+over 12,000 visitors a day or £40 a ticket. That assertion is on the live curve, not on
+the isolated scale table above it: the formula being right in isolation is not the same
+claim as the formula surviving a greedy player driving every multiplier at once, and it
+was the second claim that used to be false.
 
 ### Tuning knobs, in order of leverage
 
@@ -254,6 +333,8 @@ regression test.
 | Longer run | `resistance` divisor in `src/sim/state.js` (currently `/9`) |
 | More/fewer finds | `find` per era in `cultures.js`, and the `findGap` floor `2.2 + depth×0.015` |
 | Slower rating climb | the `+ 6000` in `rating` and the `softCap` ceilings in `museum.js` |
+| Busier or quieter museum | `PEAK_DAY` and `OUTREACH_CAP` in `museum.js` |
+| Longer or shorter trading day | `OPEN_AT` / `CLOSE_AT` / `NIGHT_SPEED` in `museum.js` |
 | Punchier early game | `base` and `mul` on the first four upgrades in `upgrades.js` |
 
 ### Prestige — opening a new site
@@ -394,7 +475,7 @@ src/
   content/upgrades.js two shops + the research list
   content/lore.js     intro, ending, era notes
   sim/state.js        the state object and every derived rate
-  sim/museum.js       rating, visitors, income, collection sets
+  sim/museum.js       the clock, rating, footfall, admission, collection sets
   sim/game.js         descent, excavation, keystones, offline catch-up, prestige
   sim/save.js         localStorage + export/import
   art/people.js       visitor sprites, seven archetypes
@@ -407,7 +488,11 @@ src/
   main.js             boot, frame, modals, wiring
 tools/
   smoke.js            headless: errors, every generator, the balance curve, save round-trip
+  shots.js            stocks a mid-game museum and grabs the screenshots
   contact.html        every sprite generator on one page
+  makepdf.py          typesets this document
+.github/workflows/
+  deploy.yml          publishes the repository root to Cloudflare Pages
 ```
 
 **Rules the code keeps to.** No DOM under `src/core`, `src/content` or `src/sim` — the
@@ -459,6 +544,24 @@ Ranked by value per unit of work.
 |---|---|
 | `npm run serve` | static server on :8000 |
 | `npm run smoke` | headless Chromium: console errors, every art generator, the balance curve, save round-trip |
+| `npm run docs` | regenerate this document as a PDF |
+| `node tools/shots.js` | regrab the screenshots from a stocked mid-game museum |
 
 `index.html` also opens directly from the filesystem — the scripts are plain, not
 modules, specifically so that it does.
+
+### Deployment
+
+There is nothing to build, so deployment is "copy the repository somewhere with a web
+server". `.github/workflows/deploy.yml` pushes the root to **Cloudflare Pages** on every
+commit to the working branch and on `main`. It needs two repository secrets:
+
+| Secret | Where it comes from |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → Create Token → **Edit Cloudflare Workers** (or a custom token with `Account · Cloudflare Pages · Edit`) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages → the ID in the right-hand column, or in the URL |
+
+Add them under *Settings → Secrets and variables → Actions*. The project name the
+workflow deploys to is `site7-deep-survey`; change `projectName` in the workflow if the
+Pages project is called something else. Until the secrets exist the workflow skips
+rather than fails.
