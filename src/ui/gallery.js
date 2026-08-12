@@ -15,10 +15,11 @@
   const V = S7.visitors;
 
   const SCALE = 2;                 /* world pixels -> canvas pixels */
-  const CW = 800, CH = 420;        /* canvas — taller for multi-storey */
-  const VIEW_W = CW / SCALE;       /* logical width of the viewport */
-  const VIEW_H = CH / SCALE;       /* logical height of the viewport */
-  const VIEW = VIEW_W;             /* legacy alias */
+  /* Internal buffer grows to fill the on-screen frame (see resizeCanvas). */
+  let CW = 1100, CH = 560;
+  let VIEW_W = CW / SCALE;
+  let VIEW_H = CH / SCALE;
+  let VIEW = VIEW_W;
 
   const WALL_TOP = 14;
   const PLAQUE_Y = 26;
@@ -91,18 +92,49 @@
 
   /* ---------- setup ---------------------------------------------------------- */
 
-  function init(el, handlers) {
-    canvas = el;
+  /* Match the canvas buffer to the laid-out CSS box so the museum fills the
+     window instead of sitting in a fixed postcard. Always even so SCALE stays
+     an integer mapping of world pixels. */
+  function resizeCanvas() {
+    if (!canvas) return;
+    const parent = canvas.parentElement || canvas;
+    const cssW = Math.max(640, Math.floor(parent.clientWidth || 1100));
+    const cssH = Math.max(360, Math.floor(parent.clientHeight || 560));
+    /* Backing store at device pixels would blur pixel art; keep 1 CSS px = 1
+       buffer px and draw at SCALE inside that. */
+    let nextW = Math.floor(cssW / 2) * 2;
+    let nextH = Math.floor(cssH / 2) * 2;
+    nextW = Math.max(640, Math.min(1920, nextW));
+    nextH = Math.max(360, Math.min(1100, nextH));
+    if (nextW === CW && nextH === CH && canvas.width === CW) return;
+    CW = nextW;
+    CH = nextH;
+    VIEW_W = VIEW = CW / SCALE;
+    VIEW_H = CH / SCALE;
     canvas.width = CW;
     canvas.height = CH;
-    ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = false;
+    if (ctx) ctx.imageSmoothingEnabled = false;
+    camX = clampCamX(camX);
+    camY = clampCamY(camY);
+    camTX = clampCamX(camTX);
+    camTY = clampCamY(camTY);
+  }
+
+  function init(el, handlers) {
+    canvas = el;
     onOpen = handlers.onOpen;
     onSelect = handlers.onSelect;
+    ctx = canvas.getContext("2d");
+    resizeCanvas();
+    ctx.imageSmoothingEnabled = false;
+    window.addEventListener("resize", () => { resizeCanvas(); });
 
     const local = (e) => {
       const r = canvas.getBoundingClientRect();
-      return { x: (e.clientX - r.left) * (CW / r.width), y: (e.clientY - r.top) * (CH / r.height) };
+      return {
+        x: (e.clientX - r.left) * (CW / Math.max(1, r.width)),
+        y: (e.clientY - r.top) * (CH / Math.max(1, r.height)),
+      };
     };
 
     canvas.addEventListener("pointerdown", (e) => {
@@ -1296,6 +1328,7 @@
   /* ---------- the frame -------------------------------------------------------- */
 
   function draw(S, crowd, dt) {
+    resizeCanvas();
     fac = facilities(S);
     const L = layoutCache = V.getLayout(S);
     camX = clampCamX(camX);
@@ -1453,7 +1486,11 @@
 
   S7.galleryView = {
     init, draw, rooms, currentRoom, goToRoom, goToFloor, nudge, invalidate,
-    setArrange, isArranging, isDragging, probe, clearSelection,
-    CW, CH, SCALE, VIEW: VIEW_W, VIEW_W, VIEW_H,
+    setArrange, isArranging, isDragging, probe, clearSelection, resizeCanvas,
+    get CW() { return CW; },
+    get CH() { return CH; },
+    get VIEW_W() { return VIEW_W; },
+    get VIEW_H() { return VIEW_H; },
+    SCALE, get VIEW() { return VIEW_W; },
   };
 })(window.S7 = window.S7 || {});
