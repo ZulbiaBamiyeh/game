@@ -136,14 +136,15 @@
   const clearRate = (S) =>
     5 * (1 + (S.up.crew || 0) * 0.30) * S.mul.clear * (1 + S.add.clear) * siteBonus(S);
 
-  /* Finds thin out with depth. Without this the descent rate and the find rate
-     feed each other and the late game becomes an unreadable blur. */
-  /* The floor rises with depth: the deposit thins as you go down, so finds per
-     metre cannot climb for ever no matter how good your sieve gets. */
-  const findGap = (S) =>
-    Math.max(2.2 + S.depth * 0.015,
-             S7.cultures.eraAt(S.depth).find * (1 + S.depth / 700) *
-             S.mul.findGap / (1 + S.red.findGap));
+  /* Finds thin out with depth, but side galleries keep upper horizons busy —
+     so the gap shortens a little as more bands open. */
+  const findGap = (S) => {
+    const face = S7.cultures.eraAt(S.depth).find * (1 + S.depth / 780);
+    const openBands = S7.cultures.eraIndex(S.depth) + 1;
+    const branch = 1 / (1 + Math.max(0, openBands - 1) * 0.045);
+    return Math.max(1.9 + S.depth * 0.012,
+      face * branch * S.mul.findGap / (1 + S.red.findGap));
+  };
 
   /* Last fortnight's average day at the door. What the Institute's grant is
      actually set on — public money follows the turnstile. */

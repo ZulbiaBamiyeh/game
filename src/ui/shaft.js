@@ -14,9 +14,10 @@
   const R = S7.raster, C = S7.cultures;
   const { fbm, hsh, clamp } = R;
 
-  const BW = 100, BH = 84, BS = 4;   /* buffer size and blow-up factor */
+  const BW = 128, BH = 96, BS = 4;   /* wider buffer for side galleries */
   const MPP = 1.5;                   /* metres per buffer row */
-  const TL = 39, TR = 62;            /* tunnel walls, in buffer columns */
+  const TL = 52, TR = 78;            /* main shaft walls, in buffer columns */
+  const GALLERY_LEN = 22;            /* how far side digs run into the wall */
 
   let canvas, ctx, buf, bufCtx, bufImg, bufPix;
   const RGB = {};
@@ -129,6 +130,154 @@
     else if (feat === "none") t = 3.5 + (fbm(x * 0.3, wr * 0.3, seed) - 0.5) * 0.7;
 
     return { era, t };
+  }
+
+  /* Tiny digger: body + swinging pick. `side` digs horizontally into the wall. */
+  function put(x, y, col) {
+    if (y < 0 || y >= BH || x < 0 || x >= BW) return;
+    bufPix[y * BW + x] = col;
+  }
+
+  function drawDigger(px, py, phase, vertical) {
+    const skin = px32(210, 160, 110);
+    const shirt = px32(70, 90, 110);
+    const pants = px32(45, 40, 35);
+    const tool = px32(160, 160, 170);
+    const wood = px32(120, 80, 40);
+    /* body */
+    put(px, py, skin);
+    put(px, py + 1, shirt);
+    put(px, py + 2, shirt);
+    put(px + 1, py + 1, shirt);
+    put(px, py + 3, pants);
+    put(px, py + 4, pants);
+    put(px - 1, py + 4, pants);
+    /* pickaxe swing — 4 frames */
+    const fr = ((phase % 8) + 8) % 8;
+    if (vertical) {
+      /* pick above head / into wall beside them */
+      if (fr < 2) {
+        put(px + 1, py, wood); put(px + 2, py - 1, tool); put(px + 3, py - 1, tool);
+      } else if (fr < 4) {
+        put(px + 1, py + 1, wood); put(px + 2, py + 1, tool); put(px + 3, py + 2, tool);
+      } else if (fr < 6) {
+        put(px + 1, py + 2, wood); put(px + 2, py + 3, tool); put(px + 1, py + 3, tool);
+      } else {
+        put(px + 1, py, wood); put(px + 2, py, tool); put(px + 3, py - 1, tool);
+      }
+    } else {
+      /* side gallery: dig into the left wall */
+      if (fr < 2) {
+        put(px - 1, py, wood); put(px - 2, py - 1, tool); put(px - 3, py - 1, tool);
+      } else if (fr < 4) {
+        put(px - 1, py + 1, wood); put(px - 2, py + 1, tool); put(px - 3, py + 1, tool);
+      } else if (fr < 6) {
+        put(px - 1, py + 2, wood); put(px - 2, py + 2, tool); put(px - 3, py + 3, tool);
+      } else {
+        put(px - 1, py + 1, wood); put(px - 2, py, tool); put(px - 3, py, tool);
+      }
+      /* spark of spoil when pick hits */
+      if (fr === 3 || fr === 4) {
+        put(px - 4, py + 1, px32(180, 160, 100));
+        put(px - 5, py + 2, px32(140, 120, 80));
+      }
+    }
+  }
+
+  /* Horizontal adits off the main shaft for every horizon the drill has opened. */
+  function drawSideGalleries(S, rowOff, phase, drillRow) {
+    const maxD = S.depth;
+    if (maxD < 2) return;
+    const crewLvl = S.up.crew || 0;
+    let bandFrom = 0;
+    let bandI = 0;
+    for (const era of C.ERAS) {
+      if (bandFrom >= maxD - 0.5) break;
+      const bandTo = Math.min(era.to >= 1e8 ? C.MAX_DEPTH : era.to, maxD);
+      if (bandTo <= bandFrom + 1) { bandFrom = era.to; bandI++; continue; }
+
+      /* Gallery sits mid-band (or mid-unlocked stretch). */
+      const midM = (bandFrom + bandTo) * 0.5;
+      const wr = midM / MPP;
+      const y = Math.round(wr - rowOff);
+      /* Only draw if near the visible window (gallery is a few rows tall). */
+      if (y > -6 && y < BH + 6) {
+        const open = Math.min(GALLERY_LEN, 10 + Math.floor((bandTo - bandFrom) / 12));
+        const h = 3 + (bandI % 2);
+        /* Tunnel cut into the left wall */
+        for (let dy = -1; dy <= h; dy++) {
+          for (let dx = 1; dx <= open; dx++) {
+            const yy = y + dy, xx = TL - dx;
+            if (yy < 0 || yy >= BH || xx < 0) continue;
+            /* Hollow with a floor and rough roof */
+            if (dy === h) {
+              bufPix[yy * BW + xx] = ramp32(era.ramp, 2.2);
+            } else if (dy === -1) {
+              bufPix[yy * BW + xx] = ramp32(era.ramp, 4.5);
+            } else {
+              const edge = dx === open || dy === 0;
+              bufPix[yy * BW + xx] = edge
+                ? ramp32(era.ramp, 1.6)
+                : px32(18 + (dx % 3), 14, 10);
+            }
+          }
+        }
+        /* Timber props at the mouth */
+        if (y >= 0 && y < BH) {
+          put(TL - 1, y, ramp32("timber", 4));
+          if (y + h < BH) put(TL - 1, y + h, ramp32("timber", 3));
+        }
+        /* Lamp glow in the adit */
+        for (let dx = 2; dx < open - 1; dx++) {
+          const yy = y + 1, xx = TL - dx;
+          if (yy < 0 || yy >= BH || xx < 0) continue;
+          const c = bufPix[yy * BW + xx];
+          const k = 1.15 + (dx < 6 ? 0.25 : 0);
+          bufPix[yy * BW + xx] = px32(
+            clamp((c & 255) * k, 0, 255) | 0,
+            clamp(((c >> 8) & 255) * k, 0, 255) | 0,
+            clamp(((c >> 16) & 255) * k * 0.9, 0, 255) | 0);
+        }
+        /* Diggers working the face of the side gallery */
+        const nDig = Math.min(3, 1 + Math.floor(crewLvl / 3) + (bandI === C.eraIndex(maxD) ? 1 : 0));
+        for (let d = 0; d < nDig; d++) {
+          const px = TL - 4 - d * 5;
+          const py = y + (d % 2);
+          if (px < 2 || py < 1 || py >= BH - 5) continue;
+          /* Only animate if this gallery is opened (drill past the band start). */
+          if (maxD > bandFrom + 0.5)
+            drawDigger(px, py, phase + d * 5 + bandI * 2, false);
+        }
+        /* Occasional spoil pile at gallery mouth */
+        if ((phase + bandI) % 5 < 2 && y + h + 1 < BH) {
+          put(TL - 2, y + h, ramp32(era.ramp, 5));
+          put(TL - 3, y + h, ramp32(era.ramp, 4));
+        }
+      }
+
+      /* Right-side stub galleries on alternate bands for variety */
+      if (bandI % 2 === 1 && maxD > bandFrom + 2) {
+        const mid2 = bandFrom + (bandTo - bandFrom) * 0.72;
+        const wr2 = mid2 / MPP;
+        const y2 = Math.round(wr2 - rowOff);
+        if (y2 > -4 && y2 < BH + 4) {
+          const openR = 8 + Math.min(8, Math.floor(crewLvl / 2));
+          for (let dy = 0; dy <= 2; dy++)
+            for (let dx = 1; dx <= openR; dx++) {
+              const yy = y2 + dy, xx = TR + dx;
+              if (yy < 0 || yy >= BH || xx >= BW) continue;
+              bufPix[yy * BW + xx] = dy === 2
+                ? ramp32(era.ramp, 2.5)
+                : px32(16, 12, 10);
+            }
+          if (crewLvl > 0 && y2 >= 1 && y2 < BH - 5)
+            drawDigger(TR + 3, y2, phase + bandI * 3, true);
+        }
+      }
+
+      bandFrom = era.to;
+      bandI++;
+    }
   }
 
   /* ---------- the frame --------------------------------------------------- */
@@ -357,19 +506,23 @@
             clamp(((c >> 16) & 255) * k * 0.92, 0, 255) | 0);
         }
 
-      /* crew silhouettes at the top of the visible hole when you hire diggers */
+      /* crew at the cutting face */
       if (crewLvl > 0 && dy0 > 14) {
-        const nCrew = Math.min(4, 1 + Math.floor(crewLvl / 4));
+        const nCrew = Math.min(3, 1 + Math.floor(crewLvl / 5));
         for (let c = 0; c < nCrew; c++) {
-          const px = TL + 3 + c * 4;
-          const py = Math.max(1, Math.min(BH - 6, dy0 - 14 - (c % 2)));
-          if (px >= TR - 2) break;
-          bufPix[py * BW + px] = px32(60, 48, 32);
-          if (py + 1 < BH) bufPix[(py + 1) * BW + px] = px32(90, 70, 45);
-          if (py + 2 < BH) bufPix[(py + 2) * BW + px] = px32(40, 36, 28);
+          const px = TL + 4 + c * 5;
+          const py = Math.max(2, Math.min(BH - 8, dy0 - 12 - (c % 2)));
+          if (px >= TR - 3) break;
+          drawDigger(px, py, phase + c * 3, true);
         }
       }
     }
+
+    /* Side galleries: once the drill has opened a horizon, diggers branch out
+       into the wall and work that band with pickaxes. Depth is the ceiling on
+       how old a find can be; these adits are where the shallower stuff still
+       comes from. */
+    drawSideGalleries(S, rowOff, phase, drillRow);
 
     bufCtx.putImageData(bufImg, 0, 0);
     ctx.imageSmoothingEnabled = false;

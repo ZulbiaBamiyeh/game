@@ -66,6 +66,14 @@
     marker: ["Survey marker", "Datum plate", "Benchmark plate"],
     bell: ["Small bell", "Cast bell", "Hand bell"],
     astrolabe: ["Astrolabe", "Engraved instrument", "Brass astrolabe"],
+    brooch: ["Brooch", "Cloak pin", "Decorated brooch"],
+    comb: ["Bone comb", "Toothed comb", "Carved comb"],
+    ring: ["Finger ring", "Plain ring", "Set ring"],
+    spindle: ["Spindle whorl", "Clay whorl", "Stone whorl"],
+    axehead: ["Socketed axehead", "Bronze axe", "Axe blade"],
+    weight: ["Loom weight", "Net weight", "Stone weight"],
+    earring: ["Earring", "Gold earring", "Hoop earring"],
+    ladle: ["Bronze ladle", "Serving ladle", "Long-handled ladle"],
     /* Egypt */
     scarab: ["Scarab seal", "Carved scarab", "Heart scarab"],
     canopic: ["Canopic jar", "Organ jar", "Canopic vessel"],
@@ -323,6 +331,48 @@
     return C.byId[ids[idx]];
   }
 
+  /* Drill depth is a ceiling: you never get older than the cutting face.
+     Within that range, finds still come from shallower unlocked tiers so the
+     side galleries stay productive. Face bias rises as you go deeper. */
+  function rollFindDepth(rng, maxDepth) {
+    const cap = Math.max(0.5, maxDepth);
+    const faceIdx = C.eraIndex(cap);
+    const r = rng.f();
+
+    /* ~48% near the cutting face (current horizon). */
+    if (r < 0.48 || faceIdx <= 0) {
+      const era = C.eraAt(cap);
+      const from = faceIdx <= 0 ? 0 : C.ERAS[faceIdx - 1].to;
+      const lo = Math.max(from, cap - Math.max(8, (cap - from) * 0.55));
+      return Math.round(rng.range(lo, cap) * 10) / 10;
+    }
+
+    /* ~40% from a random unlocked shallower band (side-gallery digs).
+       Weight lightly toward mid-depth so early bands stay in play. */
+    if (r < 0.88) {
+      let total = 0;
+      const weights = [];
+      for (let i = 0; i <= faceIdx; i++) {
+        /* Shallow bands stay busy; the face band is handled above so de-weight it. */
+        const w = i === faceIdx ? 0.35 : (1.15 + (faceIdx - i) * 0.12);
+        weights.push(w);
+        total += w;
+      }
+      let roll = rng.f() * total, pick = 0;
+      for (let i = 0; i < weights.length; i++) {
+        roll -= weights[i];
+        if (roll <= 0) { pick = i; break; }
+      }
+      const from = pick <= 0 ? 0 : C.ERAS[pick - 1].to;
+      const to = Math.min(C.ERAS[pick].to >= 1e8 ? C.MAX_DEPTH : C.ERAS[pick].to, cap);
+      if (to <= from + 0.5) return Math.round(cap * 10) / 10;
+      return Math.round(rng.range(from + 0.3, to) * 10) / 10;
+    }
+
+    /* ~12% pure scatter across everything unlocked. */
+    return Math.round(rng.range(0.5, cap) * 10) / 10;
+  }
+
   function pickKind(rng, culture, depth) {
     const deep = depth / C.MAX_DEPTH;
     const opts = [{ k: "object", w: 58 }];
@@ -399,6 +449,10 @@
       bonefrag: ["bone"], bottle: ["glass"], nail: ["rust"], console: ["plastic"],
       ledger: ["leather"], watch: ["steel"], marker: ["brass"], figurine: ["clay", "stone", "bone", "sand"],
       bell: ["bronze", "brass"], astrolabe: ["brass", "bronze"],
+      brooch: ["bronze", "silver", "gold", "brass"], comb: ["bone", "wood", "ivory"],
+      ring: ["gold", "silver", "bronze", "iron"], spindle: ["clay", "stone", "bone"],
+      axehead: ["bronze", "iron", "stone"], weight: ["clay", "stone", "lead"],
+      earring: ["gold", "silver", "bronze"], ladle: ["bronze", "brass", "silver"],
       scarab: ["stone", "gold", "celadon", "obsid"], canopic: ["stone", "sand", "clay", "celadon"],
       ankh: ["gold", "bronze", "stone"], ushabti: ["celadon", "sand", "stone", "clay"],
       pectoral: ["gold", "stone", "glass"],
@@ -571,6 +625,8 @@
     handaxe: 15, torc: 17, sherd: 16, figurine: 17, astrolabe: 17, ledger: 17,
     mirror: 19, bottle: 19, tablet: 19, bell: 20, bonefrag: 21, blade: 24,
     vessel: 29, blockStone: 32, marker: 36,
+    brooch: 12, comb: 14, ring: 10, spindle: 12, axehead: 18, weight: 14,
+    earring: 9, ladle: 16,
     scarab: 12, ankh: 16, ushabti: 22, canopic: 26, pectoral: 24,
     dinoTooth: 18, dinoClaw: 22, ammonite: 22, trilobite: 18, crinoid: 16,
     goldNugget: 14, pyrite: 16, fluorite: 18, opal: 15, meteorite: 22,
@@ -709,6 +765,6 @@
 
   S7.artifacts = {
     CONDITIONS, RARITIES, makeArtifact, spriteFor, thumbFor, scaledFor,
-    materialLabel, physical, blurb, OBJECT_NOUNS,
+    materialLabel, physical, blurb, rollFindDepth, pickCulture, OBJECT_NOUNS,
   };
 })(window.S7 = window.S7 || {});

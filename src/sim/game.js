@@ -164,6 +164,20 @@
     return a;
   }
 
+  /* Next find depth: never older than the drill face, often from side galleries
+     in horizons the drill has already opened. */
+  function nextFindDepth(S) {
+    const rng = S7.rng(S7.hashString(S.seed + ":fd:" + S.accession + ":" + Math.round(S.depth * 10)));
+    return S7.artifacts.rollFindDepth(rng, S.depth);
+  }
+
+  function findSourceLabel(depth, faceDepth) {
+    const era = S7.cultures.eraAt(depth);
+    const faceEra = S7.cultures.eraAt(faceDepth);
+    if (era.id === faceEra.id) return "at the cutting face";
+    return "in the " + era.name.toLowerCase() + " side gallery";
+  }
+
   /* ---------- sites --------------------------------------------------------
      The prestige loop. The shaft is disposable; the museum is not. Opening a
      new site resets depth and every piece of site equipment, keeps the whole
@@ -235,7 +249,9 @@
     S.stats.finds++;
     if (S7.cultures.eraAt(artifact.depth).id === "unattr" ||
         S7.cultures.eraAt(artifact.depth).id === "floor") S.stats.deepFinds++;
-    log(S, "<b>" + artifact.depth.toFixed(1) + " m</b> — contact. Something is in the matrix.");
+    const where = findSourceLabel(artifact.depth, S.depth);
+    log(S, "<b>" + artifact.depth.toFixed(1) + " m</b> — contact " + where +
+           ". Something is in the matrix.");
     return S.active;
   }
 
@@ -488,7 +504,7 @@
         beginDig(S, mintKeystone(S, k));
       } else if (S.depth >= S.nextFindAt) {
         S.nextFindAt = S.depth + S7.state.findGap(S);
-        beginDig(S, mintFind(S, S.depth));
+        beginDig(S, mintFind(S, nextFindDepth(S)));
       }
     } else if (!S.milestones.exhausted) {
       S.milestones.exhausted = true;
@@ -549,7 +565,7 @@
         }
         if (S.depth < S.nextFindAt) break;
         S.nextFindAt = S.depth + S7.state.findGap(S);
-        const a = mintFind(S, S.depth);
+        const a = mintFind(S, nextFindDepth(S));
         S.stats.finds++;
         a.display = true;
         S7.boons.apply(S, a.boon);
@@ -588,7 +604,7 @@
     CELL, GRID, KEYSTONES, MILESTONES,
     SITE_NAMES, siteName, canOpenNewSite, openNewSite,
     admit, amenitySale, closeBooks, runMuseum,
-    log, checkMilestones, mintFind, beginDig, brush, exposure, multiplierFor,
+    log, checkMilestones, mintFind, nextFindDepth, findSourceLabel, beginDig, brush, exposure, multiplierFor,
     understandingBase, understandingFactor, understandingAward, understandingOffline,
     fileInterpretation, finishDig, accession, step, catchUp,
   };

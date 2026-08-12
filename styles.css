@@ -133,6 +133,18 @@ main{padding:12px 16px 20px}
 
 /* ---------- the shaft stage ----------------------------------------------- */
 
+.branch-list{display:flex;flex-direction:column;gap:5px;margin-top:4px}
+.branch-row{
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:11px;padding:5px 7px;background:var(--panel-2);border:1px solid var(--line);
+}
+.branch-row b{font-weight:600;color:var(--bone);font-family:var(--prose)}
+.branch-row span{color:var(--ink-3);font-size:10px}
+.branch-row.open{border-color:#5a4a28}
+.branch-row.open b{color:var(--ochre)}
+.branch-row.face{border-color:var(--ochre-2);background:#2a2214}
+.branch-row.face b{color:var(--ochre)}
+
 .stage{border:1px solid var(--line);background:#0b0905;box-shadow:var(--shadow)}
 .stage-head{
   display:flex;justify-content:space-between;gap:8px;padding:7px 11px;
@@ -141,7 +153,7 @@ main{padding:12px 16px 20px}
 }
 .stage-head span:last-child{color:var(--ochre-2)}
 .canvaswrap{position:relative;line-height:0}
-#c-shaft,#c-dig{max-height:66vh;margin:0 auto}
+#c-shaft,#c-dig{max-height:min(72vh, 640px);margin:0 auto;width:100%;max-width:560px}
 canvas{display:block;width:100%;height:auto;image-rendering:pixelated;touch-action:manipulation}
 #c-shaft{touch-action:none;cursor:grab}
 #c-dig{cursor:crosshair}

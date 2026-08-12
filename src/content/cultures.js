@@ -18,71 +18,71 @@
       period: "c. 1950–present", eerie: 0,
       painting: { painter: "modern", frame: "minimal" }, paintNoun: "Framed print",
       sculpture: { carver: "bust", materials: ["marble", "alum", "plastic"] }, sculptNoun: "Cast head",
-      objects: ["cap", "console", "tag", "key", "bottle", "coin", "needle"] },
+      objects: ["cap", "console", "tag", "key", "bottle", "coin", "needle", "ring", "comb"] },
 
     { id: "industrial", name: "Industrial horizon", short: "Industrial", region: "local",
       period: "c. 1750–1950", eerie: 0,
       painting: { painter: "victorian", frame: "wood" }, paintNoun: "Oil painting on board",
-      objects: ["nail", "bottle", "key", "coin", "tag", "needle", "buckle"] },
+      objects: ["nail", "bottle", "key", "coin", "tag", "needle", "buckle", "weight", "ladle"] },
 
     { id: "victorian", name: "Victorian collection", short: "Victorian", region: "imported",
       period: "c. 1830–1900", eerie: 0,
       painting: { painter: "victorian", frame: "gilt" }, paintNoun: "Portrait of an unknown sitter",
       sculpture: { carver: "bust", materials: ["marble", "granite"] }, sculptNoun: "Portrait bust",
-      objects: ["coin", "mirror", "bead", "needle", "ledger", "key"] },
+      objects: ["coin", "mirror", "bead", "needle", "ledger", "key", "brooch", "earring", "comb"] },
 
     /* ---------- 45–80 m: early modern ------------------------------------ */
     { id: "renaissance", name: "Renaissance Europe", short: "Renaissance", region: "Italian peninsula",
       period: "c. 1400–1600", eerie: 0,
       painting: { painter: "renaissance", frame: "gilt" }, paintNoun: "Panel painting",
       sculpture: { carver: "bust", materials: ["marble"] }, sculptNoun: "Marble bust",
-      objects: ["coin", "blade", "mirror", "vessel", "torc"] },
+      objects: ["coin", "blade", "mirror", "vessel", "torc", "ring", "brooch"] },
 
     { id: "edo", name: "Edo Japan", short: "Edo", region: "Honshū",
       period: "c. 1603–1868", eerie: 0,
       painting: { painter: "ukiyoe", frame: "lacquer" }, paintNoun: "Woodblock print",
       sculpture: { carver: "beastStatue", materials: ["wood", "bronze", "granite"] }, sculptNoun: "Guardian figure",
-      objects: ["blade", "mirror", "seal", "vessel", "bead"] },
+      objects: ["blade", "mirror", "seal", "vessel", "bead", "comb", "ladle"] },
 
     { id: "mughal", name: "Mughal India", short: "Mughal", region: "Deccan",
       period: "c. 1526–1750", eerie: 0,
       painting: { painter: "miniature", frame: "gilt" }, paintNoun: "Miniature painting",
       sculpture: { carver: "torso", materials: ["marble", "stone"] }, sculptNoun: "Broken figure",
-      objects: ["blade", "bead", "mirror", "seal", "torc", "coin"] },
+      objects: ["blade", "bead", "mirror", "seal", "torc", "coin", "earring", "ring"] },
 
     { id: "benin", name: "Kingdom of Benin", short: "Benin", region: "Bight of Benin",
       period: "c. 1300–1700", eerie: 0,
       sculpture: { carver: "castHead", materials: ["bronze", "brass"] }, sculptNoun: "Commemorative bronze head",
-      objects: ["torc", "bead", "blade", "mirror", "bell"] },
+      objects: ["torc", "bead", "blade", "mirror", "bell", "ring", "weight"] },
 
     /* ---------- 80–125 m: medieval --------------------------------------- */
     { id: "byzantine", name: "Byzantium", short: "Byzantine", region: "Eastern Mediterranean",
       period: "c. 500–1450", eerie: 0,
       painting: { painter: "byzantine", frame: "gilt" }, paintNoun: "Religious icon",
       sculpture: { carver: "torso", materials: ["marble", "granite"] }, sculptNoun: "Draped torso",
-      objects: ["coin", "torc", "bead", "lamp", "vessel", "buckle"] },
+      objects: ["coin", "torc", "bead", "lamp", "vessel", "buckle", "ring", "brooch"] },
 
     { id: "norse", name: "Norse settlement", short: "Norse", region: "North Atlantic",
       period: "c. 793–1100", eerie: 0,
       painting: { painter: "norse", frame: "wood" }, paintNoun: "Painted wooden plank",
       sculpture: { carver: "stele", materials: ["granite", "stone"] }, sculptNoun: "Carved stone",
-      objects: ["blade", "torc", "bead", "buckle", "needle", "nail", "coin"] },
+      objects: ["blade", "torc", "bead", "buckle", "needle", "nail", "coin", "axehead", "comb", "weight"] },
 
     { id: "song", name: "Song China", short: "Song", region: "Yangtze basin",
       period: "c. 960–1279", eerie: 0,
       painting: { painter: "song", frame: "scroll" }, paintNoun: "Hanging scroll",
       sculpture: { carver: "beastStatue", materials: ["celadon", "stone", "bronze"] }, sculptNoun: "Glazed animal figure",
-      objects: ["vessel", "coin", "mirror", "bead", "seal"] },
+      objects: ["vessel", "coin", "mirror", "bead", "seal", "ladle", "spindle"] },
 
     { id: "islamic", name: "Islamic Golden Age", short: "Islamic", region: "Mesopotamia",
       period: "c. 750–1250", eerie: 0,
       painting: { painter: "islamic", frame: "wood" }, paintNoun: "Decorated tile panel",
-      objects: ["vessel", "coin", "mirror", "bead", "lamp", "tablet", "astrolabe"] },
+      objects: ["vessel", "coin", "mirror", "bead", "lamp", "tablet", "astrolabe", "ring", "earring"] },
 
     { id: "khmer", name: "Khmer Empire", short: "Khmer", region: "Mekong",
       period: "c. 802–1431", eerie: 0,
       sculpture: { carver: "torso", materials: ["stone", "granite", "basalt"] }, sculptNoun: "Torso from a doorway",
-      objects: ["blade", "bead", "torc", "vessel", "bell"] },
+      objects: ["blade", "bead", "torc", "vessel", "bell", "ring", "spindle"] },
 
     /* ---------- 125–180 m: classical ------------------------------------- */
     { id: "rome", name: "Roman provinces", short: "Roman", region: "Western Empire",

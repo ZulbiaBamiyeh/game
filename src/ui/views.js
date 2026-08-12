@@ -78,6 +78,38 @@
     const era = C.eraAt(S.depth);
     $("strat-name").textContent = era.name;
     $("strat-period").textContent = era.period;
+    renderBranches(S);
+  }
+
+  /* Horizons the drill has opened — side galleries work these while the face goes deeper. */
+  function renderBranches(S) {
+    const list = $("branch-list");
+    const note = $("branch-note");
+    if (!list) return;
+    const face = C.eraAt(S.depth);
+    const faceIdx = C.eraIndex(S.depth);
+    if (note) {
+      note.textContent = faceIdx <= 0
+        ? "still in the first horizon"
+        : (faceIdx + 1) + " horizons open · oldest unlocked: " + face.name;
+    }
+    let html = "";
+    let from = 0;
+    for (let i = 0; i < C.ERAS.length; i++) {
+      const e = C.ERAS[i];
+      const to = e.to >= 1e8 ? C.MAX_DEPTH : e.to;
+      if (S.depth < from + 0.05 && i > 0) break;
+      const opened = S.depth >= from;
+      const isFace = i === faceIdx;
+      const depthLabel = from + "–" + (to >= C.MAX_DEPTH ? C.MAX_DEPTH : to) + " m";
+      html += '<div class="branch-row' + (opened ? " open" : "") + (isFace ? " face" : "") + '">' +
+        "<b>" + esc(e.name) + (isFace ? " · cutting face" : opened ? " · side gallery" : "") + "</b>" +
+        "<span>" + depthLabel + (opened ? "" : " · sealed") + "</span></div>";
+      if (!opened) break;
+      from = e.to;
+      if (i === faceIdx) break;
+    }
+    list.innerHTML = html || '<p class="hint">Start the drill to open the first horizon.</p>';
   }
 
   /* ---------- shops -------------------------------------------------------- */
