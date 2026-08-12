@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Site 7 — Deep Survey</title>
+<meta name="description" content="An idle excavation and museum game. Dig a shaft through the whole human record, and find out who put it there.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230f0d08'/%3E%3Cpath d='M2 3h12v2H2zM7 5h2v9H7z' fill='%23c79a42'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app" hidden>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="inst">Institute for Regional Antiquities</span>
+    </div>
+    <h1>Deep Survey · Site 7</h1>
+    <div class="topright">
+      <span id="saveflag" class="saveflag">saved</span>
+      <button id="btn-menu" class="ghost" type="button">Menu</button>
+    </div>
+  </header>
+
+  <div class="statbar" id="statbar">
+    <div class="stat"><div class="k">Depth</div><div class="v em" id="s-depth">0.0 m</div><div class="s" id="s-rate">—</div></div>
+    <div class="stat"><div class="k">Funding</div><div class="v" id="s-funds">0</div><div class="s" id="s-inc">—</div></div>
+    <div class="stat"><div class="k">Museum rating</div><div class="v" id="s-stars">☆☆☆☆☆</div><div class="s" id="s-rating">—</div></div>
+    <div class="stat"><div class="k">Visitors</div><div class="v" id="s-vis">0</div><div class="s" id="s-vistot">—</div></div>
+    <div class="stat"><div class="k">Understanding</div><div class="v" id="s-und">0</div><div class="s" id="s-coll">—</div></div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="site" class="on" type="button">Shaft</button>
+    <button data-tab="museum" type="button">Museum <span id="tab-mus-n"></span></button>
+    <button data-tab="research" type="button">Research</button>
+    <button data-tab="log" type="button">Log</button>
+  </nav>
+
+  <main>
+    <!-- ================= SHAFT ================= -->
+    <section id="v-site" class="view">
+      <div class="col-stage">
+        <div class="stage">
+          <div class="stage-head">
+            <span id="strat-name">Topsoil</span>
+            <span id="strat-period">1950 – present</span>
+          </div>
+          <div class="canvaswrap">
+            <!-- dimensions are set by src/ui/shaft.js from its own buffer size -->
+            <canvas id="c-shaft" width="400" height="336"></canvas>
+            <canvas id="c-dig" width="400" height="336" hidden></canvas>
+            <div class="stage-foot">
+              <span id="ov-l">Descending</span>
+              <span id="ov-r"></span>
+            </div>
+          </div>
+          <div class="bar"><i id="progbar"></i></div>
+        </div>
+
+        <div class="panel" id="digpanel" hidden>
+          <div class="lbl">Excavation in progress</div>
+          <p class="hint" id="dig-hint"></p>
+          <div class="stam" id="stam"></div>
+          <button id="btn-interpret" class="action" type="button" hidden>
+            <span class="bt">File an interpretation</span>
+            <span class="bd">Filing earlier is worth more Understanding</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="col-side">
+        <div class="panel">
+          <div class="lbl">Site expenditure <span class="lblnote" id="exp-note"></span></div>
+          <div id="shop-dig" class="shop"></div>
+        </div>
+        <div class="panel">
+          <div class="lbl">Recent record</div>
+          <div class="log" id="log-mini"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= MUSEUM ================= -->
+    <section id="v-museum" class="view" hidden>
+      <div class="col-stage">
+        <div class="panel ratingcard">
+          <div class="ratinghead">
+            <div>
+              <div class="lbl">Institute collection</div>
+              <div class="stars" id="m-stars">☆☆☆☆☆</div>
+            </div>
+            <div class="ratingnum"><span id="m-rating">0</span><small>/100</small></div>
+          </div>
+          <p class="verdict" id="m-verdict">Nothing on display.</p>
+          <div class="metrics" id="m-metrics"></div>
+          <div class="capbar"><i id="capfill"></i></div>
+          <div class="caplabel" id="m-cap"></div>
+        </div>
+
+        <div class="panel">
+          <div class="lbl">Galleries <span class="lblnote" id="gal-note"></span></div>
+          <div id="galleries"></div>
+        </div>
+
+        <div class="panel">
+          <div class="lbl">Collections <span class="lblnote">complete a tradition for a standing bonus</span></div>
+          <div id="sets" class="sets"></div>
+        </div>
+      </div>
+
+      <div class="col-side">
+        <div class="panel">
+          <div class="lbl">Museum expenditure</div>
+          <div id="shop-mus" class="shop"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= RESEARCH ================= -->
+    <section id="v-research" class="view" hidden>
+      <div class="col-stage">
+        <div class="panel">
+          <div class="lbl">Research programme <span class="lblnote">paid for in Understanding</span></div>
+          <p class="hint">Understanding comes from interpreting finds correctly, and from interpreting
+            them early. It buys the things money cannot.</p>
+          <div id="researchlist" class="shop"></div>
+        </div>
+      </div>
+      <div class="col-side">
+        <div class="panel">
+          <div class="lbl">Survey statistics</div>
+          <div id="statlist" class="fields"></div>
+        </div>
+        <div class="panel">
+          <div class="lbl">The deposit</div>
+          <div id="eralist" class="eras"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= LOG ================= -->
+    <section id="v-log" class="view" hidden>
+      <div class="col-stage">
+        <div class="panel">
+          <div class="lbl">Site log</div>
+          <div class="log" id="log-full"></div>
+        </div>
+      </div>
+      <div class="col-side"></div>
+    </section>
+  </main>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<div class="modal" id="m-intro" hidden><div class="box introbox" id="introbox"></div></div>
+
+<div class="modal" id="m-interp" hidden>
+  <div class="box">
+    <div class="lbl">Preliminary interpretation</div>
+    <p class="prompt" id="i-prompt"></p>
+    <p class="hint" id="i-reveal"></p>
+    <div id="i-opts" class="options"></div>
+    <button id="i-skip" class="action" type="button">
+      <span class="bt">Withhold judgement</span>
+      <span class="bd">No Understanding either way. The record notes that you declined.</span>
+    </button>
+  </div>
+</div>
+
+<div class="modal" id="m-found" hidden>
+  <div class="box">
+    <div class="lbl">Item recovered</div>
+    <div id="f-verdict"></div>
+    <div id="f-record"></div>
+    <div id="f-boon"></div>
+    <div class="rowbtns">
+      <button id="f-display" class="action primary" type="button">
+        <span class="bt">Accession and display</span>
+        <span class="bd">Goes on show. Counts toward the museum rating.</span>
+      </button>
+      <button id="f-store" class="action" type="button">
+        <span class="bt">Accession to store</span>
+        <span class="bd">Keeps the study result, takes no display space.</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="m-view" hidden>
+  <div class="box">
+    <div id="v-record"></div>
+    <div class="rowbtns">
+      <button id="v-toggle" class="action" type="button"><span class="bt">Move to store</span></button>
+      <button id="v-close" class="action" type="button"><span class="bt">Close</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="m-offline" hidden>
+  <div class="box">
+    <div class="lbl">While you were away</div>
+    <div id="o-body"></div>
+    <button id="o-ok" class="action primary" type="button"><span class="bt">Resume the survey</span></button>
+  </div>
+</div>
+
+<div class="modal" id="m-menu" hidden>
+  <div class="box">
+    <div class="lbl">Site office</div>
+    <div id="menu-body"></div>
+    <div class="rowbtns">
+      <button id="mn-close" class="action" type="button"><span class="bt">Back to the shaft</span></button>
+    </div>
+  </div>
+</div>
+
+<script src="src/core/rng.js"></script>
+<script src="src/core/raster.js"></script>
+<script src="src/art/motifs.js"></script>
+<script src="src/art/paintings.js"></script>
+<script src="src/art/sculptures.js"></script>
+<script src="src/art/objects.js"></script>
+<script src="src/content/cultures.js"></script>
+<script src="src/content/boons.js"></script>
+<script src="src/content/upgrades.js"></script>
+<script src="src/content/artifacts.js"></script>
+<script src="src/content/lore.js"></script>
+<script src="src/sim/state.js"></script>
+<script src="src/sim/museum.js"></script>
+<script src="src/sim/game.js"></script>
+<script src="src/sim/save.js"></script>
+<script src="src/ui/shaft.js"></script>
+<script src="src/ui/digview.js"></script>
+<script src="src/ui/views.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

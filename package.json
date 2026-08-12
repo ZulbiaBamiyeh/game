@@ -1,0 +1,14 @@
+{
+  "name": "site7-deep-survey",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An idle excavation and museum game. Vanilla JS, no build step.",
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "smoke": "node tools/smoke.js",
+    "docs": "python3 tools/makepdf.py"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

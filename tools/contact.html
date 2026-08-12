@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Site 7 — art contact sheet</title>
+<style>
+  body{background:#14110b;color:#d8cfb6;font:12px ui-monospace,monospace;margin:0;padding:14px}
+  h2{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#c79a42;
+     border-bottom:1px solid #3a3120;padding-bottom:5px;margin:22px 0 10px}
+  .row{display:flex;flex-wrap:wrap;gap:8px}
+  .cell{width:132px}
+  .cell canvas{width:128px;height:128px;image-rendering:pixelated;border:1px solid #3a3120;background:#0d0a06;display:block}
+  .cell b{display:block;font-weight:400;font-size:9.5px;color:#a99f88;margin-top:3px;line-height:1.35}
+</style>
+</head>
+<body>
+<div id="out"></div>
+
+<script src="../src/core/rng.js"></script>
+<script src="../src/core/raster.js"></script>
+<script src="../src/art/motifs.js"></script>
+<script src="../src/art/paintings.js"></script>
+<script src="../src/art/sculptures.js"></script>
+<script src="../src/art/objects.js"></script>
+<script src="../src/content/cultures.js"></script>
+<script>
+"use strict";
+const out = document.getElementById("out");
+let n = 0;
+
+function section(title) {
+  const h = document.createElement("h2");
+  h.textContent = title;
+  out.appendChild(h);
+  const r = document.createElement("div");
+  r.className = "row";
+  out.appendChild(r);
+  return r;
+}
+
+function cell(row, label, buf) {
+  const d = document.createElement("div");
+  d.className = "cell";
+  const c = S7.raster.bake(buf);
+  const big = document.createElement("canvas");
+  big.width = 64; big.height = 64;
+  big.getContext("2d").drawImage(c, 0, 0);
+  d.appendChild(big);
+  const b = document.createElement("b");
+  b.textContent = label;
+  d.appendChild(b);
+  row.appendChild(d);
+  n++;
+}
+
+/* paintings: two variants of every painter, in its own culture's frame */
+const seen = new Set();
+let row = section("Paintings");
+for (const cu of S7.cultures.CULTURES) {
+  if (!cu.painting || seen.has(cu.painting.painter + cu.painting.frame)) continue;
+  seen.add(cu.painting.painter + cu.painting.frame);
+  for (let i = 0; i < 2; i++)
+    cell(row, cu.short + " · " + cu.painting.painter,
+         S7.paintings.paint(S7.rng(1000 + i * 77 + n * 13), cu.painting));
+}
+
+row = section("Sculpture");
+const seenC = new Set();
+for (const cu of S7.cultures.CULTURES) {
+  if (!cu.sculpture || seenC.has(cu.sculpture.carver)) continue;
+  seenC.add(cu.sculpture.carver);
+  for (let i = 0; i < 2; i++)
+    cell(row, cu.short + " · " + cu.sculpture.carver,
+         S7.sculptures.carve(S7.rng(2000 + i * 91 + n * 7), cu.sculpture));
+}
+
+row = section("Objects");
+for (const name of Object.keys(S7.objects.OBJECTS))
+  for (let i = 0; i < 2; i++)
+    cell(row, name, S7.objects.make(S7.rng(3000 + i * 53 + n * 11), { object: name }));
+
+document.title = "Site 7 — " + n + " sprites";
+</script>
+</body>
+</html>
