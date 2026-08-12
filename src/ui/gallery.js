@@ -212,10 +212,14 @@
   const clampCamY = (y) => {
     const yMin = layoutCache ? (layoutCache.yMin !== undefined ? layoutCache.yMin : 0) : 0;
     const yMax = layoutCache
-      ? (layoutCache.yMax !== undefined ? layoutCache.yMax : (layoutCache.totalH || H))
+      ? (layoutCache.yMax !== undefined ? layoutCache.yMax : (layoutCache.totalH || V.H))
       : VIEW_H;
-    const lo = yMin;
-    const hi = Math.max(lo, yMax - VIEW_H + 24);
+    /* Tall canvases used to pin the camera so the basement could never sit in
+       the upper half of the view. Allow enough travel that any storey's wall
+       mid-height can land near the focus band (≈36% down the frame). */
+    const focusBand = VIEW_H * 0.36;
+    const lo = yMin + FLOOR_Y * 0.2 - focusBand;
+    const hi = Math.max(lo, yMax - FLOOR_Y * 0.35 - focusBand);
     return Math.max(lo, Math.min(hi, y));
   };
 
@@ -534,27 +538,46 @@
 
   function drawStairs(r) {
     const x0 = r.x, w = r.width;
-    /* Stone stair hall */
-    ctx.globalAlpha = 0.12;
-    rect(x0, WALL_TOP, w, FLOOR_Y - WALL_TOP, "#4a5a6a");
-    ctx.globalAlpha = 1;
-    /* Steps rising */
     const goingUp = (r.stairsTo || 0) > (r.floor || 0);
+    /* Stone stair hall */
+    ctx.globalAlpha = 0.14;
+    rect(x0, WALL_TOP, w, FLOOR_Y - WALL_TOP, goingUp ? "#3a4a5a" : "#3a3830");
+    ctx.globalAlpha = 1;
+    /* Steps */
     for (let i = 0; i < 8; i++) {
-      const t = i / 8;
       const y = FLOOR_Y - 8 - i * 8;
       const inset = goingUp ? i * 4 : (7 - i) * 4;
       rect(x0 + 18 + inset, y, w - 36 - inset * 1.2, 7, i % 2 ? "#5a5040" : "#4a4030");
       rect(x0 + 18 + inset, y, w - 36 - inset * 1.2, 1, "#7a6a50");
     }
-    /* Banisters */
+    /* Banisters + gold handrail */
     rect(x0 + 14, 40, 3, FLOOR_Y - 40, "#3a3426");
     rect(x0 + w - 17, 40, 3, FLOOR_Y - 40, "#3a3426");
     rect(x0 + 12, 38, w - 24, 3, "#c79a42");
-    /* Sign */
-    rect(x0 + w / 2 - 22, 42, 44, 12, "#1a160d");
-    rect(x0 + w / 2 - 22, 42, 44, 1, "#c79a42");
+    rect(x0 + 12, 38, w - 24, 1, "#e8c66a");
+    /* Direction plate */
+    const label = goingUp ? "UP" : "DOWN";
+    rect(x0 + w / 2 - 18, 42, 36, 14, "#1a160d");
+    rect(x0 + w / 2 - 18, 42, 36, 2, "#c79a42");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "700 10px " + FONT_UI;
+    fillTextShadow(label, sx(x0 + w / 2), syR(50), "#e8c66a", "#00000088");
+    /* Arrow chevron */
+    const ax = x0 + w / 2, ay = goingUp ? 62 : 100;
+    rect(ax - 1, goingUp ? 58 : 70, 2, 18, "#c79a42");
+    if (goingUp) {
+      rect(ax - 4, 60, 3, 3, "#c79a42");
+      rect(ax + 1, 60, 3, 3, "#c79a42");
+      rect(ax - 2, 58, 5, 2, "#e8c66a");
+    } else {
+      rect(ax - 4, 84, 3, 3, "#c79a42");
+      rect(ax + 1, 84, 3, 3, "#c79a42");
+      rect(ax - 2, 86, 5, 2, "#e8c66a");
+    }
     drawPlant(x0 + w - 20);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
   }
 
   /* Intro board beside the door of each gallery: a small wall plaque you can
@@ -629,13 +652,9 @@
     rect(sx0, 36, 72, 2, "#c79a42");
     rect(sx0, 52, 72, 1, "#5a4a30");
     rect(sx0 + 2, 38, 68, 12, "#2a1c12");
-    /* crisp "GIFT SHOP" over the pixel board */
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "600 10px " + FONT_UI;
-    fillTextShadow("GIFT SHOP", sx(x0 + w / 2), syR(45), "#e8c66a", "#00000088");
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
+    /* Gold rule lines — room plaque carries the name, so no second title here */
+    rect(sx0 + 10, 42, 52, 2, "#c79a42");
+    rect(sx0 + 16, 46, 40, 1, "#8a6a2c");
 
     /* Pendant lamps with warm pools */
     for (const lx of [x0 + 40, x0 + w / 2, x1 - 48]) {
@@ -791,30 +810,49 @@
   }
 
   function drawCafe(r) {
-    const x0 = r.x, x1 = r.x + r.width;
+    const x0 = r.x, x1 = r.x + r.width, w = r.width;
     const lvl = r.cafe || 1;
-    /* Soft café wash */
-    ctx.globalAlpha = 0.10;
-    rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#4a6b45");
-    ctx.globalAlpha = 1;
-    /* counter */
     const kx = r.serviceX || (x0 + 48);
-    rect(kx - 30, 96, 60, 6, "#6d5b3c");
-    rect(kx - 30, 96, 60, 2, "#87724a");
-    rect(kx - 28, 102, 56, 26, "#4f4229");
-    /* coffee machine and cups */
-    rect(kx - 18, 86, 12, 10, "#2a2a33");
-    rect(kx - 16, 88, 8, 4, "#4e9d4e");
-    for (let i = 0; i < 3; i++) rect(kx + 4 + i * 6, 90, 4, 5, i % 2 ? "#e8e1d1" : "#c79a42");
-    /* cake stand */
-    rect(kx - 8, 88, 10, 8, "#e8e1d1");
-    rect(kx - 6, 86, 6, 2, "#c79a42");
-    /* steam from the machine */
-    ctx.globalAlpha = 0.25;
-    rect(kx - 14, 80, 2, 4, "#e8e1d1");
-    rect(kx - 11, 78, 2, 5, "#e8e1d1");
+    /* Soft sage wash + pale dado */
+    ctx.globalAlpha = 0.12;
+    rect(x0, WALL_TOP, w, FLOOR_Y - WALL_TOP, "#4a6b45");
+    ctx.globalAlpha = 0.06;
+    rect(x0, 78, w, FLOOR_Y - 78, "#2a3a28");
     ctx.globalAlpha = 1;
-    /* tables with place settings — match visitor seat layout */
+    /* Runner */
+    rect(x0 + 8, FLOOR_Y + 4, w - 16, 3, "#3a4a32");
+
+    /* Pendant over the counter */
+    rect(kx - 1, 30, 2, 12, "#3a3426");
+    rect(kx - 6, 42, 12, 4, "#4a3f28");
+    rect(kx - 5, 45, 10, 2, "#ffe6ad");
+    const lg = ctx.createRadialGradient(sx(kx), syR(70), 2, sx(kx), syR(70), 40);
+    lg.addColorStop(0, "rgba(255,230,173,0.16)");
+    lg.addColorStop(1, "rgba(255,230,173,0)");
+    ctx.fillStyle = lg;
+    ctx.fillRect(sx(kx) - 44, syR(48), 88, 56);
+
+    /* Counter */
+    rect(kx - 32, 96, 64, 6, "#6d5b3c");
+    rect(kx - 32, 96, 64, 2, "#87724a");
+    rect(kx - 30, 102, 60, 26, "#4f4229");
+    rect(kx - 30, 102, 60, 1, "#2f2718");
+    /* Coffee machine + cups + cake */
+    rect(kx - 20, 84, 14, 12, "#2a2a33");
+    rect(kx - 18, 86, 10, 5, "#4e9d4e");
+    rect(kx - 16, 82, 6, 3, "#3a3a44");
+    for (let i = 0; i < 4; i++)
+      rect(kx + 2 + i * 6, 90, 4, 5, i % 2 ? "#e8e1d1" : "#c79a42");
+    rect(kx - 6, 86, 10, 8, "#e8e1d1");
+    rect(kx - 4, 84, 6, 2, "#c79a42");
+    rect(kx - 3, 88, 4, 3, "#6b3a2a");
+    /* Steam */
+    ctx.globalAlpha = 0.28;
+    rect(kx - 15, 78, 2, 5, "#e8e1d1");
+    rect(kx - 11, 76, 2, 6, "#e8e1d1");
+    ctx.globalAlpha = 1;
+
+    /* Tables with place settings — match visitor seat layout */
     const nTables = 1 + Math.min(4, lvl);
     for (let i = 0; i < nTables; i++) {
       const tx = x0 + 100 + i * 36;
@@ -826,62 +864,87 @@
       rect(tx + 7, 142, 3, 4, "#4a3f28");
       rect(tx - 4, 124, 3, 2, "#e8e1d1");
       rect(tx + 2, 124, 3, 2, "#c79a42");
-      /* chair backs */
       rect(tx - 14, 132, 3, 10, "#4a3f28");
       rect(tx + 11, 132, 3, 10, "#4a3f28");
     }
-    /* chalkboard menu */
-    rect(x0 + 12, 44, 32, 40, "#1a2218");
-    rect(x0 + 12, 44, 32, 1, "#4a6b45");
-    for (let i = 0; i < 7; i++) rect(x0 + 15, 50 + i * 4, 16 + (i % 3) * 4, 1, "#6a8b65");
-    /* "OPEN" lamp over the counter once the café is established */
+
+    /* Chalkboard menu with title rule */
+    rect(x0 + 12, 42, 34, 44, "#1a2218");
+    rect(x0 + 12, 42, 34, 2, "#4a6b45");
+    rect(x0 + 16, 48, 20, 2, "#6a8b65");
+    for (let i = 0; i < 6; i++) rect(x0 + 15, 54 + i * 4, 14 + (i % 3) * 5, 1, "#5a7a55");
+    /* Pastry case once the café is established */
     if (lvl >= 2) {
-      rect(kx - 6, 42, 12, 4, "#2a2418");
-      rect(kx - 4, 44, 8, 2, "#4e9d4e");
+      rect(kx + 18, 100, 22, 16, "#3a3426");
+      ctx.globalAlpha = 0.2;
+      rect(kx + 19, 101, 20, 10, "#9dc0cd");
+      ctx.globalAlpha = 1;
+      rect(kx + 21, 104, 5, 4, "#c79a42");
+      rect(kx + 28, 105, 5, 3, "#e8e1d1");
+      rect(kx + 22, 110, 6, 3, "#6b3a2a");
     }
-    /* Barista */
+    if (lvl >= 3) {
+      rect(kx - 8, 40, 16, 5, "#2a2418");
+      rect(kx - 6, 42, 12, 2, "#4e9d4e");
+    }
     drawStaffAt(kx, FLOOR_Y + 16, "cafe");
     drawPlant(x1 - 22);
+    if (lvl >= 2) drawPlant(x0 + 52);
   }
 
   function drawResearchRoom(r) {
-    const x0 = r.x, x1 = r.x + r.width;
-    /* Cool study light */
-    ctx.globalAlpha = 0.14;
-    rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#2a3a4a");
+    const x0 = r.x, x1 = r.x + r.width, w = r.width;
+    /* Cool study wash */
+    ctx.globalAlpha = 0.16;
+    rect(x0, WALL_TOP, w, FLOOR_Y - WALL_TOP, "#2a3a4a");
+    ctx.globalAlpha = 0.06;
+    rect(x0, WALL_TOP, w, 20, "#4a6a8a");
     ctx.globalAlpha = 1;
     /* Long reading table */
-    rect(x0 + 30, 118, r.width - 60, 5, "#5a4a30");
-    rect(x0 + 30, 118, r.width - 60, 1, "#87724a");
-    rect(x0 + 34, 123, 4, 14, "#4a3f28");
-    rect(x1 - 50, 123, 4, 14, "#4a3f28");
-    /* Books and lamp */
+    rect(x0 + 28, 118, w - 56, 5, "#5a4a30");
+    rect(x0 + 28, 118, w - 56, 1, "#87724a");
+    rect(x0 + 32, 123, 4, 14, "#4a3f28");
+    rect(x1 - 48, 123, 4, 14, "#4a3f28");
+    /* Open books + papers */
     for (let i = 0; i < 5; i++)
-      rect(x0 + 50 + i * 12, 110, 8, 8, i % 2 ? "#6b5a8a" : "#8a6a2c");
-    rect(x0 + r.width / 2 - 4, 100, 8, 18, "#3a3a44");
-    rect(x0 + r.width / 2 - 6, 98, 12, 3, "#ffe6ad");
-    /* Lamp glow */
-    const g = ctx.createRadialGradient(
-      sx(x0 + r.width / 2), syR(98), 2,
-      sx(x0 + r.width / 2), syR(98), 28);
-    g.addColorStop(0, "rgba(255,230,173,0.18)");
+      rect(x0 + 48 + i * 14, 110, 10, 7, i % 2 ? "#6b5a8a" : "#c4b896");
+    rect(x0 + 56, 108, 8, 2, "#e8e1d1");
+    /* Desk lamp */
+    const lx = x0 + w / 2;
+    rect(lx - 4, 100, 8, 18, "#3a3a44");
+    rect(lx - 6, 98, 12, 3, "#ffe6ad");
+    rect(lx - 1, 92, 2, 6, "#4a3f28");
+    const g = ctx.createRadialGradient(sx(lx), syR(98), 2, sx(lx), syR(98), 32);
+    g.addColorStop(0, "rgba(255,230,173,0.2)");
     g.addColorStop(1, "rgba(255,230,173,0)");
     ctx.fillStyle = g;
-    ctx.fillRect(sx(x0 + r.width / 2 - 30), sy(70), 60, 50);
-    /* Shelf of reference volumes */
-    rect(x0 + 14, 48, 40, 3, "#4a3f28");
-    for (let i = 0; i < 6; i++) rect(x0 + 16 + i * 6, 40, 5, 8, i % 3 === 0 ? "#4a6b45" : "#6b5a3a");
-    /* Map pinned to the wall */
-    rect(x1 - 48, 48, 28, 22, "#c4b896");
-    rect(x1 - 46, 50, 24, 18, "#8a9a6a");
-    rect(x1 - 42, 54, 8, 6, "#6a7a4a");
-    /* Card catalogue drawers */
-    rect(x0 + 18, 100, 22, 16, "#5a4a30");
-    for (let i = 0; i < 3; i++) {
-      rect(x0 + 20, 102 + i * 4, 18, 3, "#4a3f28");
-      rect(x0 + 27, 103 + i * 4, 2, 1, "#c79a42");
+    ctx.fillRect(sx(lx) - 36, syR(70), 72, 50);
+    /* Tall bookcase */
+    rect(x0 + 12, 44, 36, FLOOR_Y - 50, "#3a3020");
+    rect(x0 + 12, 44, 36, 2, "#5a4a30");
+    for (let row = 0; row < 5; row++) {
+      const y = 56 + row * 11;
+      rect(x0 + 14, y, 32, 2, "#4a3f28");
+      for (let i = 0; i < 6; i++)
+        rect(x0 + 15 + i * 5, y - 8, 4, 8, i % 3 === 0 ? "#4a6b45" : i % 3 === 1 ? "#6b5a8a" : "#8a6a2c");
     }
-    drawPlant(x1 - 22);
+    /* Map pinned to the wall */
+    rect(x1 - 50, 46, 30, 24, "#c4b896");
+    rect(x1 - 48, 48, 26, 20, "#8a9a6a");
+    rect(x1 - 44, 52, 10, 8, "#6a7a4a");
+    rect(x1 - 32, 58, 8, 5, "#5a6a4a");
+    /* Card catalogue */
+    rect(x0 + 54, 100, 24, 16, "#5a4a30");
+    for (let i = 0; i < 3; i++) {
+      rect(x0 + 56, 102 + i * 4, 20, 3, "#4a3f28");
+      rect(x0 + 64, 103 + i * 4, 2, 1, "#c79a42");
+    }
+    /* Reading chair */
+    rect(x1 - 40, 128, 14, 3, "#4a3f28");
+    rect(x1 - 38, 131, 3, 10, "#3a3426");
+    rect(x1 - 30, 131, 3, 10, "#3a3426");
+    rect(x1 - 40, 120, 3, 10, "#4a3f28");
+    drawPlant(x1 - 18);
   }
 
   function drawDeepGallery(r) {
@@ -980,16 +1043,17 @@
         for (let px = x0 + 40; px < x0 + w - 30; px += 48)
           rect(px, WALL_TOP + 12, 3, 10, "#3a3426");
         const tx = x0 + w / 2;
-        rect(tx - 52, 34, 104, 16, "#0c0a06");
-        rect(tx - 52, 34, 104, 1, "#5a4e35");
+        rect(tx - 56, 32, 112, 18, "#0c0a06");
+        rect(tx - 56, 32, 112, 2, "#8a6a2c");
+        rect(tx - 56, 48, 112, 1, "#3a3020");
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = "600 10px " + FONT_UI;
-        fillTextShadow("BASEMENT — SEALED", sx(tx), syR(42), "#8a7a5a", "#00000088");
+        ctx.font = "700 11px " + FONT_UI;
+        fillTextShadow("BASEMENT — SEALED", sx(tx), syR(41), "#c4b896", "#000000aa");
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
       }
-    } else {
+    } else if (kind === "upper") {
       for (let y = WALL_TOP; y < FLOOR_Y; y++) {
         const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
         rect(x0, y, w, 1, t < 0.4 ? "#3a3428" : t < 0.75 ? "#322c22" : "#2a241c");
@@ -1036,15 +1100,31 @@
           rect(x0 + w - 38, 50 + s * 10, 2, 10, "#4a3f28");
         }
         const tx = x0 + w / 2;
-        rect(tx - 58, 30, 116, 16, "#0c0a06");
-        rect(tx - 58, 30, 116, 1, "#c79a42");
+        rect(tx - 62, 28, 124, 18, "#0c0a06");
+        rect(tx - 62, 28, 124, 2, "#c79a42");
+        rect(tx - 62, 44, 124, 1, "#3a3020");
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = "600 10px " + FONT_UI;
-        fillTextShadow("UPPER FLOOR — NOT OPEN", sx(tx), syR(38), "#c4b896", "#00000088");
+        ctx.font = "700 11px " + FONT_UI;
+        fillTextShadow("UPPER FLOOR — NOT OPEN", sx(tx), syR(37), "#e8c66a", "#000000aa");
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
       }
+    } else {
+      /* Ground mass: gallery walls so basement halls never sit under black void. */
+      for (let y = WALL_TOP; y < FLOOR_Y; y++) {
+        const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
+        rect(x0, y, w, 1, t < 0.16 ? C.wallTop : t < 0.46 ? C.wallHi : t < 0.82 ? C.wallLo : C.wallShade);
+      }
+      rect(x0, RAIL_Y, w, 2, C.rail);
+      rect(x0, 78, w, 3, "#4a3f28");
+      rect(x0, FLOOR_Y - 6, w, 6, C.skirt);
+      for (let y = FLOOR_Y; y < V.H; y++) {
+        const t = (y - FLOOR_Y) / (V.H - FLOOR_Y);
+        rect(x0, y, w, 1, t < 0.18 ? C.floorFar : t < 0.55 ? C.floorLo : C.floorHi);
+      }
+      rect(x0, 0, w, WALL_TOP - 8, C.ceil);
+      rect(x0, WALL_TOP - 8, w, 4, C.cove);
     }
 
     roomLocal = false;
@@ -1427,6 +1507,8 @@
 
   /* Room name over the doorway — a real wall plaque, not floating type. */
   function drawRoomPlaque(r) {
+    /* Stairs carry their own UP/DOWN plate. */
+    if (r.stairs) return;
     const name = (r.era && r.era.name) ? r.era.name : "";
     const period = (r.era && r.era.period) ? r.era.period : "";
     if (!name) return;
@@ -1681,9 +1763,11 @@
       ctx.fillRect(0, sy(by), CW, Math.round(FLOOR_PITCH * SCALE));
     }
 
-    /* Storey shells first (behind open rooms). Locked floors get construction
-       clutter; open floors still get structure so gaps aren't black. */
+    /* Storey shells first (behind open rooms). Every storey gets structure so
+       gaps (e.g. above a basement hall that sits past the ground run) aren't
+       black void. Locked floors get construction clutter. */
     drawStoreyShell(1, totalW, "upper", !!(L.lockedUpper || maxF < 1));
+    drawStoreyShell(0, totalW, "ground", false);
     drawStoreyShell(-1, totalW, "basement", !!(L.lockedBasement || minF > -1));
 
     /* Structural slabs between every storey of the envelope. */
@@ -1769,14 +1853,9 @@
     ctx.fillStyle = gy;
     ctx.fillRect(0, 0, CW, CH);
 
-    /* Floor label in corner — which storey is under the camera centre. */
+    /* Floor label in corner — which storey is under the camera focus. */
     if (shellMax > shellMin) {
-      const midY = camY + VIEW_H * 0.45;
-      let fl = 0, best = 1e9;
-      for (let f = shellMin; f <= shellMax; f++) {
-        const d = Math.abs(midY - (V.floorBase(f) + FLOOR_Y * 0.5));
-        if (d < best) { best = d; fl = f; }
-      }
+      const fl = floorAtCamera();
       const open = L.rooms.some((r) => (r.floor != null ? r.floor : 0) === fl);
       let label = V.floorLabel ? V.floorLabel(fl) : ("Floor " + fl);
       if (!open) label += " · sealed";
@@ -1804,17 +1883,32 @@
 
   function rooms() { return layoutCache ? layoutCache.rooms : []; }
 
-  function currentRoom() {
-    if (!layoutCache) return null;
-    const midY = camY + VIEW_H * 0.45;
-    const minF = layoutCache.minFloor !== undefined ? layoutCache.minFloor : 0;
-    const maxF = layoutCache.maxFloor !== undefined ? layoutCache.maxFloor : 0;
+  /* Put a storey's wall mid-height in the upper half of the view so the floor
+     below doesn't steal "current floor" detection on a tall canvas. */
+  function focusFloorY(f) {
+    const base = V.floorBase(f);
+    const focus = base + FLOOR_Y * 0.42;
+    return clampCamY(focus - VIEW_H * 0.36);
+  }
+
+  function floorAtCamera() {
+    if (!layoutCache) return 0;
+    const midY = camY + VIEW_H * 0.36;
+    const shellMin = layoutCache.shellMin !== undefined ? layoutCache.shellMin
+      : (layoutCache.minFloor !== undefined ? layoutCache.minFloor : 0);
+    const shellMax = layoutCache.shellMax !== undefined ? layoutCache.shellMax
+      : (layoutCache.maxFloor !== undefined ? layoutCache.maxFloor : 0);
     let fl = 0, best = 1e9;
-    for (let f = minF; f <= maxF; f++) {
-      const d = Math.abs(midY - (V.floorBase(f) + FLOOR_Y * 0.5));
+    for (let f = shellMin; f <= shellMax; f++) {
+      const d = Math.abs(midY - (V.floorBase(f) + FLOOR_Y * 0.45));
       if (d < best) { best = d; fl = f; }
     }
-    return V.roomAt(layoutCache, camX + VIEW_W / 2, fl);
+    return fl;
+  }
+
+  function currentRoom() {
+    if (!layoutCache) return null;
+    return V.roomAt(layoutCache, camX + VIEW_W / 2, floorAtCamera());
   }
 
   function goToRoom(i) {
@@ -1822,11 +1916,19 @@
     if (!rs.length) return;
     const r = rs[Math.max(0, Math.min(rs.length - 1, i))];
     camTX = clampCamX(r.x + r.width / 2 - VIEW_W / 2);
-    camTY = clampCamY(V.floorBase(r.floor || 0) + 8);
+    camTY = focusFloorY(r.floor != null ? r.floor : 0);
   }
 
   function goToFloor(f) {
-    camTY = clampCamY(V.floorBase(f) + 8);
+    camTY = focusFloorY(f);
+    /* Pan to the first real room on this storey — otherwise you land over the
+       empty foundation under the foyer and think the floor is blank. */
+    const rs = rooms().filter((r) => (r.floor != null ? r.floor : 0) === f);
+    const prefer = rs.find((r) => r.exhibits && r.exhibits.length) ||
+                   rs.find((r) => !r.stairs && !r.foyer) ||
+                   rs.find((r) => !r.stairs) ||
+                   rs[0];
+    if (prefer) camTX = clampCamX(prefer.x + prefer.width / 2 - VIEW_W / 2);
   }
 
   function nudge(dir) {

@@ -55,8 +55,12 @@
   /* ---------- the collection ------------------------------------------------ */
 
   /* Soft cap: behaves like x while x is small, and can never exceed k.
-     Facilities multiply the collection's pull; they do not replace it. */
-  const softCap = (x, k) => (k * x) / (k + x - 1);
+     Facilities multiply the collection's pull; they do not replace it.
+     Guard non-positive x so a bad mul can never push footfall negative. */
+  const softCap = (x, k) => {
+    if (!(x > 0) || !(k > 0)) return 0;
+    return (k * x) / (k + x - 1);
+  };
 
   const displayed = (S) => S.collection.filter((a) => a.display !== false);
 
@@ -141,7 +145,7 @@
     if (sv.count === 0) return 0;
     const standing = Math.pow(Math.max(0, sv.rating) / 100, 1.25);
     const outreach = softCap(S.mul.visitors * (1 + S.add.visitors), OUTREACH_CAP);
-    return PEAK_DAY * standing * outreach * priceFactor(S, sv);
+    return Math.max(0, PEAK_DAY * standing * outreach * priceFactor(S, sv));
   }
 
   /* Arrivals per museum-minute at the current time of day. */

@@ -430,46 +430,54 @@
       });
     }
 
-    /* Compact room chips — no dropdown. */
+    /* Compact room chips — skip landing stairs (the floor switcher covers those);
+       keep the ground-floor stair bays so you can jump to the stair hall. */
     const map = $("gal-map");
-    const sig = rooms.map((r) => r.era.id + ":" + (r.floor || 0) + ":" +
+    const chipRooms = rooms.map((r, i) => ({ r, i })).filter(({ r }) => {
+      if (!r.stairs) return true;
+      /* Keep only the ground-floor stair entries (up to upper / down to basement). */
+      return (r.floor || 0) === 0;
+    });
+    const sig = chipRooms.map(({ r }) => r.era.id + ":" + (r.floor || 0) + ":" +
       (r.exhibits ? r.exhibits.length : 0)).join("|");
     if (map.dataset.sig !== sig) {
       map.dataset.sig = sig;
       map.innerHTML = "";
-      rooms.forEach((r, i) => {
+      chipRooms.forEach(({ r, i }) => {
         const n = r.exhibits ? r.exhibits.length : 0;
-        const label = (r.era.short || r.era.name || "Room").replace(/ horizon$/i, "");
+        let label = (r.era.short || r.era.name || "Room").replace(/ horizon$/i, "");
+        if (r.stairs) {
+          const up = (r.stairsTo || 0) > (r.floor || 0);
+          label = up ? "Stairs ↑" : "Stairs ↓";
+        }
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "galchip" +
           (r.featured ? " featured" : "") +
           (r.foyer ? " foyer" : "") +
           (r.shop || r.cafe ? " amenity" : "") +
-          (r.stairs ? " stairs" : "");
-        const fl = r.floor || 0;
+          (r.stairs ? " stairs" : "") +
+          (r.researchRoom ? " amenity" : "");
+        const fl = r.floor != null ? r.floor : 0;
         const flMark = fl > 0 ? "↑" : fl < 0 ? "↓" : "·";
         chip.innerHTML = "<b>" + V.esc(label) + "</b>" +
           (n ? "<span>" + n + "</span>" :
             r.foyer || r.amenity || r.stairs ? "<span>" + flMark + "</span>" : "<span>—</span>");
         chip.title = r.era.name + (r.era.period ? " · " + r.era.period : "") +
           (fl !== 0 && S7.visitors.floorLabel ? " · " + S7.visitors.floorLabel(fl) : "");
+        chip.dataset.idx = String(i);
         chip.addEventListener("click", () => S7.galleryView.goToRoom(i));
         map.appendChild(chip);
       });
     }
     const chips = map.querySelectorAll(".galchip");
-    rooms.forEach((r, i) => {
-      if (chips[i]) chips[i].classList.toggle("on", r === here);
+    chips.forEach((chip) => {
+      const idx = parseInt(chip.dataset.idx, 10);
+      const on = rooms[idx] === here;
+      chip.classList.toggle("on", on);
+      if (on && chip.scrollIntoView)
+        chip.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
     });
-    if (here) {
-      const hi = rooms.indexOf(here);
-      if (hi >= 0) {
-        const onChip = chips[hi];
-        if (onChip && onChip.scrollIntoView)
-          onChip.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-      }
-    }
 
     const sv = M.survey(S);
     $("gal-crowd").textContent = sv.count === 0
