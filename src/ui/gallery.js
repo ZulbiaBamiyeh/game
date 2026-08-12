@@ -835,12 +835,18 @@
     ctx.restore();
   }
 
-  /* ---------- overlay (crisp, unscaled) ---------------------------------------- */
+  /* ---------- labels & HUD text (crisp, unscaled) -------------------------------
+     Accession plates live with the exhibit in the depth sort, not in the final
+     overlay — otherwise a visitor walking past a plinth gets the item number
+     stamped across their chest. Speech bubbles and the selected wall card stay
+     in the overlay because those are UI, not furniture. */
 
   function drawLabel(e) {
     const b = exhibitBox(e);
     const x = sx(e.x);
-    const y = e.mount === "wall" ? sy(b.y + b.h) + 12 : sy(FLOOR_Y + 12);
+    /* Wall plates hang just under the frame; floor pieces get a plate on the
+       skirting in front of the mount — both still behind the walk band. */
+    const y = e.mount === "wall" ? sy(b.y + b.h) + 12 : sy(FLOOR_Y + 6);
     if (x < -80 || x > CW + 80) return;
     const labels = fac ? fac.labels : 0;
     ctx.font = "9px ui-monospace, monospace";
@@ -1032,10 +1038,13 @@
     }
 
     /* Everything that stands on the floor is depth-sorted together, so a
-       visitor can walk behind a plinth and in front of the next one. */
+       visitor can walk behind a plinth and in front of the next one. Accession
+       labels are drawn with their piece so they stay behind the walk band. */
     const items = [];
-    for (const e of L.exhibits)
-      items.push({ y: e.mount === "wall" ? 0 : FLOOR_Y + 8, fn: () => drawExhibit(e, S) });
+    for (const e of L.exhibits) {
+      const ey = e.mount === "wall" ? 0 : FLOOR_Y + 8;
+      items.push({ y: ey, fn: () => { drawExhibit(e, S); drawLabel(e); } });
+    }
     for (const bn of L.benches)
       items.push({ y: V.BENCH_Y - 4, fn: () => drawBench(bn) });
     for (const r of L.rooms)
@@ -1065,9 +1074,9 @@
       ctx.globalAlpha = 1;
     }
 
-    /* overlay */
+    /* overlay — room plaques (high on the wall), money floaters, the selected
+       wall card, and speech. Not accession plates: those are furniture. */
     for (const r of L.rooms) drawRoomPlaque(r);
-    for (const e of L.exhibits) drawLabel(e);
     for (const a of crowd.agents) if (a.paid) drawPaidFloater(a);
     if (selected && L.exhibits.indexOf(selected) >= 0) drawWallLabel(selected);
     bubbleRects = [];
