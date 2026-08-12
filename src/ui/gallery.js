@@ -29,7 +29,7 @@
   let dragging = false, dragMoved = 0, dragX = 0, dragCam = 0;
   let layoutCache = null;
   let onOpen = null, onSelect = null;
-  let hover = null, selected = null;
+  let hover = null, selected = null;   /* exhibit, or { board:true, room } */
   let arrange = false;
   let dragEx = null;                /* an exhibit being carried to a new spot */
   let pointer = { x: 0, y: 0 };
@@ -105,7 +105,7 @@
       const p = local(e);
       pointer = p;
       const hit = pick(p.x, p.y);
-      if (arrange && hit) {
+      if (arrange && hit && hit.a) {
         dragEx = { e: hit, from: hit.room };
         dragMoved = 0;
         canvas.setPointerCapture(e.pointerId);
@@ -134,7 +134,9 @@
       }
       if (layoutCache) {
         hover = pick(p.x, p.y);
-        canvas.style.cursor = hover ? (arrange ? "grab" : "pointer") : (arrange ? "default" : "grab");
+        const over = !!hover;
+        canvas.style.cursor = over ? (arrange && hover.a ? "grab" : "pointer")
+                                   : (arrange ? "default" : "grab");
       }
     });
 
@@ -153,7 +155,11 @@
       if (dragMoved < 4) {
         const hit = pick(p.x, p.y);
         selected = hit || null;
-        if (onSelect) onSelect(hit ? hit.a : null);
+        if (onSelect) {
+          if (!hit) onSelect(null);
+          else if (hit.board) onSelect({ board: true, room: hit.room });
+          else onSelect(hit.a);
+        }
       }
     };
     canvas.addEventListener("pointerup", release);
@@ -161,7 +167,7 @@
     canvas.addEventListener("dblclick", (e) => {
       const p = local(e);
       const hit = pick(p.x, p.y);
-      if (hit && onOpen) onOpen(hit.a);
+      if (hit && hit.a && onOpen) onOpen(hit.a);
     });
     canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -192,13 +198,26 @@
   const isArranging = () => arrange;
   const isDragging = () => !!dragEx;
   /* Test hook: what the hit-test sees at a canvas-space point. */
-  const probe = (px, py) => { const e = pick(px, py); return { cam, arrange, hit: e ? e.a.no : null }; };
+  const probe = (px, py) => {
+    const e = pick(px, py);
+    return {
+      cam, arrange,
+      hit: e && e.a ? e.a.no : null,
+      board: !!(e && e.board),
+    };
+  };
   const clearSelection = () => { selected = null; };
 
   const clampCam = (x) =>
     Math.max(0, Math.min(Math.max(0, (layoutCache ? layoutCache.total : VIEW) - VIEW), x));
 
-  /* Which exhibit, if any, is under a canvas-space point. */
+  /* World-space box of the room intro board, just inside the left wall. */
+  function boardBox(r) {
+    return { x: r.x + 11, y: 40, w: 32, h: 42 };
+  }
+
+  /* Exhibit first, then room boards — so a piece hanging near the plaque still
+     wins the click. Boards return { board:true, room }. */
   function pick(px, py) {
     if (!layoutCache) return null;
     const wx = px / SCALE + cam, wy = py / SCALE;
@@ -206,7 +225,17 @@
       const b = exhibitBox(e);
       if (wx >= b.x - 4 && wx <= b.x + b.w + 4 && wy >= b.y - 4 && wy <= b.y + b.h + 8) return e;
     }
+    for (const r of layoutCache.rooms) {
+      if (!roomHasBoard(r)) continue;
+      const b = boardBox(r);
+      if (wx >= b.x - 2 && wx <= b.x + b.w + 2 && wy >= b.y - 2 && wy <= b.y + b.h + 2)
+        return { board: true, room: r };
+    }
     return null;
+  }
+
+  function roomHasBoard(r) {
+    return !!(r && r.era && !r.foyer && !r.amenity && r.exhibits && r.exhibits.length);
   }
 
   /* Where an exhibit's artwork sits, in world pixels — driven by the object's
@@ -353,20 +382,13 @@
     if (r.deepgal) { drawDeepGallery(r); return; }
     if (r.wing) { drawWingRoom(r); return; }
 
-    /* the block of wall text every gallery has, drawn as texture not words */
-    const px0 = x0 + 12;
-    if (r.exhibits.length) {
-      rect(px0, 44, 26, 32, "#453c2a");
-      rect(px0, 44, 26, 1, "#665941");
-      rect(px0, 44, 1, 32, "#665941");
-      rect(px0 + 3, 47, 20, 2, C.rail);
-      for (let i = 0; i < 8; i++) rect(px0 + 3, 53 + i * 3, 14 + (i % 3) * 6, 1, "#5d5138");
-    }
+    if (roomHasBoard(r)) drawInfoBoard(r);
     if (r.width > 260) drawPlant(x1 - 22);
 
-    /* Climate control: a wall unit and the soft blue of a cooled room. */
+    /* Climate control: a wall unit and the soft blue of a cooled room.
+       Kept clear of the intro board on the left. */
     if (fac && (fac.climate > 0 || fac.climateOn)) {
-      drawClimateUnit(x0 + 18);
+      drawClimateUnit(x0 + 52);
       if (fac.climate >= 3 || fac.climateOn) {
         ctx.globalAlpha = 0.04;
         rect(x0, WALL_TOP, r.width, FLOOR_Y - WALL_TOP, "#8ec4d8");
@@ -406,6 +428,39 @@
     }
   }
 
+  /* Intro board beside the door of each gallery: a small wall plaque you can
+     click for the era and where the finds on these walls actually come from. */
+  function drawInfoBoard(r) {
+    const b = boardBox(r);
+    const lit = (selected && selected.board && selected.room === r) ||
+                (hover && hover.board && hover.room === r);
+
+    /* Mount plate and frame */
+    rect(b.x - 1, b.y - 1, b.w + 2, b.h + 2, lit ? "#8a6a2c" : "#2a2418");
+    rect(b.x, b.y, b.w, b.h, "#1a160d");
+    rect(b.x, b.y, b.w, 1, lit ? "#e8c66a" : "#c79a42");
+    rect(b.x, b.y + 1, b.w, 1, "#4a3f28");
+    /* Header bar */
+    rect(b.x + 2, b.y + 4, b.w - 4, 6, "#2f2818");
+    rect(b.x + 3, b.y + 5, b.w - 6, 2, lit ? "#e8c66a" : "#8a6a2c");
+    /* Body lines — texture for the wall, real words drawn in the overlay */
+    for (let i = 0; i < 5; i++) {
+      const w = 10 + (i % 3) * 5;
+      rect(b.x + 4, b.y + 14 + i * 4, w, 1, i === 0 ? "#6b5a3a" : "#3d3423");
+    }
+    /* Small corner dots like screw heads */
+    rect(b.x + 2, b.y + 2, 1, 1, "#5a4e35");
+    rect(b.x + b.w - 3, b.y + 2, 1, 1, "#5a4e35");
+    rect(b.x + 2, b.y + b.h - 3, 1, 1, "#5a4e35");
+    rect(b.x + b.w - 3, b.y + b.h - 3, 1, 1, "#5a4e35");
+
+    if (lit) {
+      ctx.strokeStyle = "#e8c66a";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx(b.x) - 2, sy(b.y) - 2, Math.round(b.w * SCALE) + 4, Math.round(b.h * SCALE) + 4);
+    }
+  }
+
   function drawClimateUnit(px) {
     rect(px, 52, 14, 10, "#3a4248");
     rect(px, 52, 14, 1, "#6a7a84");
@@ -419,7 +474,7 @@
       for (let i = 0; i < 4; i++) guideSprites.push(S7.people.makePerson(9000 + i * 17, "staff"));
     }
     const s = guideSprites[Math.abs(Math.floor(r.x / 40)) % guideSprites.length];
-    const gx = r.x + 36;
+    const gx = r.x + 58;   /* clear of the intro board */
     if (gx < cam - 30 || gx > cam + VIEW + 30) return;
     const py = sy(FLOOR_Y + 18) - s.h * PERSON;
     ctx.drawImage(s.stand, sx(gx) - Math.round(s.w * PERSON / 2), py, s.w * PERSON, s.h * PERSON);
@@ -665,7 +720,8 @@
     if (b.x + b.w < cam - 20 || b.x > cam + VIEW + 20) return;
     const art = artAt(e, b);
     const aw = Math.round(b.w * SCALE), ah = Math.round(b.h * SCALE);
-    const ring = selected === e ? "#e8c66a" : hover === e ? "#c79a42" : null;
+    const ring = (selected && !selected.board && selected === e) ? "#e8c66a"
+               : (hover && !hover.board && hover === e) ? "#c79a42" : null;
     const cases = fac ? fac.cases : 0;
     const plinths = fac ? fac.plinths : 0;
 
@@ -896,6 +952,29 @@
     ctx.textAlign = "left";
   }
 
+  /* Short label on the intro board itself, crisp over the pixel art. */
+  function drawBoardLabel(r) {
+    if (!roomHasBoard(r)) return;
+    const b = boardBox(r);
+    const cx = sx(b.x + b.w / 2);
+    if (cx < -40 || cx > CW + 40) return;
+    let name = (r.era.name || "").toUpperCase()
+      .replace(/ HORIZON$/, "")
+      .replace(/ FILL$/, "")
+      .replace(/ DEPOSIT$/, "")
+      .replace(/^THE /, "");
+    if (name.length > 11) name = name.slice(0, 10) + "…";
+    ctx.textAlign = "center";
+    ctx.font = "600 8px ui-monospace, monospace";
+    ctx.fillStyle = "#c79a42";
+    ctx.fillText(name, cx, sy(b.y + 14));
+    ctx.font = "7px ui-monospace, monospace";
+    ctx.fillStyle = "#7d7461";
+    const n = r.exhibits.length;
+    ctx.fillText(n + (n === 1 ? " find" : " finds"), cx, sy(b.y + 22));
+    ctx.textAlign = "left";
+  }
+
   /* The card beside the piece — short, plain, the way a real gallery writes. */
   function drawWallLabel(e) {
     const b = exhibitBox(e);
@@ -1077,11 +1156,14 @@
       ctx.globalAlpha = 1;
     }
 
-    /* overlay — room plaques (high on the wall), money floaters, the selected
-       wall card, and speech. Not accession plates: those are furniture. */
-    for (const r of L.rooms) drawRoomPlaque(r);
+    /* overlay — room plaques (high on the wall), board titles, money floaters,
+       the selected wall card, and speech. Not accession plates: those are furniture. */
+    for (const r of L.rooms) {
+      drawRoomPlaque(r);
+      drawBoardLabel(r);
+    }
     for (const a of crowd.agents) if (a.paid) drawPaidFloater(a);
-    if (selected && L.exhibits.indexOf(selected) >= 0) drawWallLabel(selected);
+    if (selected && !selected.board && L.exhibits.indexOf(selected) >= 0) drawWallLabel(selected);
     bubbleRects = [];
     for (const a of crowd.agents) drawBubble(a);
 

@@ -271,16 +271,21 @@
 
   /* The label under the floor: what you just clicked on. Written the way a
      gallery label is written — name, where it is from, a short note — not a
-     dump of every field on the accession card. */
-  function showCaption(a) {
+     dump of every field on the accession card. Room intro boards pass
+     `{ board:true, room }` instead of an artifact. */
+  function showCaption(sel) {
     const box = $("gal-caption");
-    if (!a) {
-      box.innerHTML = '<p class="caphint">Click a piece to read its label. ' +
-        'Double-click for the full record.</p>';
+    if (!sel) {
+      box.innerHTML = '<p class="caphint">Click a piece to read its label, or a room board for the era. ' +
+        'Double-click a piece for the full record.</p>';
       return;
     }
+    if (sel.board && sel.room) {
+      showRoomCaption(sel.room);
+      return;
+    }
+    const a = sel;
     const cu = S7.cultures.byId[a.cultureId];
-    const era = S7.cultures.eraAt(a.depth);
     const phys = S7.artifacts.physical(a);
     const where = cu
       ? (cu.name + (cu.period && cu.period !== "—" ? ", " + cu.period : ""))
@@ -304,6 +309,69 @@
       '<span class="bt">Full record</span></button></div>';
     const btn = $("cap-open");
     if (btn) btn.addEventListener("click", () => openArtifact(a));
+  }
+
+  /* Intro board click: the era this gallery covers, and which traditions the
+     pieces on these walls actually come from. */
+  function showRoomCaption(room) {
+    const box = $("gal-caption");
+    const era = room.era || {};
+    const exhibits = room.exhibits || [];
+    const byCulture = new Map();
+    let minD = Infinity, maxD = -Infinity;
+    for (const e of exhibits) {
+      const a = e.a;
+      const id = a.cultureId || "?";
+      if (!byCulture.has(id)) byCulture.set(id, { n: 0, depths: [] });
+      const row = byCulture.get(id);
+      row.n++;
+      row.depths.push(a.depth);
+      if (a.depth < minD) minD = a.depth;
+      if (a.depth > maxD) maxD = a.depth;
+    }
+    const sources = [...byCulture.entries()]
+      .map(([id, row]) => {
+        const cu = S7.cultures.byId[id];
+        const name = cu ? cu.name : "Unknown tradition";
+        const period = cu && cu.period && cu.period !== "—" ? cu.period : null;
+        const line = name + (period ? " (" + period + ")" : "") +
+          " — " + row.n + (row.n === 1 ? " piece" : " pieces");
+        return { line, n: row.n };
+      })
+      .sort((p, q) => q.n - p.n);
+
+    /* Depth band of this era from the table, if we know it. */
+    const eraDef = S7.cultures.ERAS.find((e) => e.id === era.id);
+    let band = era.period || "";
+    if (eraDef) {
+      const from = eraDef === S7.cultures.ERAS[0] ? 0
+        : S7.cultures.ERAS[S7.cultures.ERAS.indexOf(eraDef) - 1].to;
+      const to = eraDef.to >= 1e8 ? S7.cultures.MAX_DEPTH : eraDef.to;
+      band = era.period + " · " + from + "–" + to + " m in the shaft";
+    }
+
+    let html =
+      '<div class="caprow"><div>' +
+      '<p class="capname">' + V.esc(era.name || "Gallery") + '</p>' +
+      '<p class="capmeta">' + V.esc(band) + '</p>' +
+      '<p class="capnote">' + exhibits.length +
+      (exhibits.length === 1 ? " piece on these walls" : " pieces on these walls");
+    if (exhibits.length && isFinite(minD))
+      html += " · lifted between " + minD.toFixed(1) + " m and " + maxD.toFixed(1) + " m";
+    html += "</p>";
+
+    if (sources.length) {
+      html += '<p class="capnote capdesc"><b>Finds in this room come from</b></p><ul class="capsources">';
+      for (const s of sources.slice(0, 8))
+        html += "<li>" + V.esc(s.line) + "</li>";
+      if (sources.length > 8)
+        html += "<li>…and " + (sources.length - 8) + " more</li>";
+      html += "</ul>";
+    } else {
+      html += '<p class="capnote capdesc">Nothing on the walls yet.</p>';
+    }
+    html += "</div></div>";
+    box.innerHTML = html;
   }
 
   function renderRoomBar() {

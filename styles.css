@@ -259,6 +259,12 @@ button.action.afford{border-left:2px solid var(--ochre-2)}
 .capmeta{font-size:10.5px;color:var(--ochre-2);margin:0 0 3px;letter-spacing:.04em}
 .capnote{font-size:10.5px;color:var(--ink-3);margin:0;line-height:1.55}
 .capdesc{margin-top:6px;color:var(--ink-2);max-width:52em}
+.capsources{
+  margin:4px 0 0;padding:0 0 0 1.1em;font-size:10.5px;color:var(--ink-2);line-height:1.55;
+  max-width:52em;
+}
+.capsources li{margin:1px 0}
+.capsources b,.capdesc b{color:var(--bone);font-weight:600}
 .caprow{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
 .caprow>div{min-width:0}
 .capdot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
