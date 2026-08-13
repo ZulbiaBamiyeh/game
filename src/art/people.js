@@ -67,12 +67,24 @@
 
     const cx = 9;
     const top = (p.small ? 4 : 0) - (o.lift || 0);
-    const hairY = top, headY = top + 1, neckY = top + 7, torsoY = top + 8;
+    /* A dipped head is most of what reading a label looks like from behind. */
+    const stoop = o.stoop || 0;
+    const hairY = top + stoop, headY = top + 1 + stoop, neckY = top + 7 + stoop;
+    const torsoY = top + 8;
     const hipY = top + 16, legEnd = GROUND;
     const shade = SKIN_SHADE[p.skin] || p.skin;
 
     /* --- legs ------------------------------------------------------------- */
-    if (o.sitting) {
+    if (o.crouching) {
+      /* Knees up under the chin — how a child looks into a low case. */
+      box(cx - 4, hipY, 8, 3, p.bottom);
+      box(cx - 5, hipY + 2, 4, 4, p.bottom);
+      box(cx + 1, hipY + 2, 4, 4, p.bottom);
+      box(cx - 5, hipY + 6, 3, legEnd - hipY - 6, p.bottom);
+      box(cx + 2, hipY + 6, 3, legEnd - hipY - 6, p.bottom);
+      box(cx - 6, legEnd, 4, 1, p.shoe);
+      box(cx + 2, legEnd, 4, 1, p.shoe);
+    } else if (o.sitting) {
       /* thighs forward, shins dropping to the floor */
       box(cx - 4, hipY - 1, 8, 3, p.bottom);
       box(cx + 1, hipY - 1, 6, 3, p.bottom);
@@ -113,6 +125,28 @@
       box(cx + 4, armT + 1, 2, 3, p.top);
       box(cx - 5, armT, 1, 2, shade);
       box(cx + 5, armT, 1, 2, shade);
+    } else if (o.sketching) {
+      /* one forearm braced under the pad, the other working on it */
+      box(cx - 7, armT + 2, 3, 2, p.top);
+      box(cx + 3, armT + 1, 3, 2, p.top);
+      put(cx + 2, armT + 3, shade);
+    } else if (o.selfie) {
+      /* arm out and up, phone at the end of it */
+      box(cx + 4, armT, 2, 2, p.top);
+      box(cx + 6, armT - 3, 2, 4, p.top);
+      put(cx + 7, armT - 4, shade);
+      box(cx - 5, armT + 1, 1, 5, p.top);
+      put(cx - 5, armT + 6, shade);
+    } else if (o.mapOut) {
+      /* both hands out in front, holding something open */
+      box(cx - 6, armT + 2, 2, 2, p.top);
+      box(cx + 4, armT + 2, 2, 2, p.top);
+    } else if (o.waving) {
+      box(cx + 4, armT - 1, 2, 2, p.top);
+      box(cx + 5, armT - 5, 1, 5, p.top);
+      put(cx + 5, armT - 6, shade);
+      box(cx - 5, armT + 1, 1, 5, p.top);
+      put(cx - 5, armT + 6, shade);
     } else if (o.pointing) {
       box(cx + 4, armT, 2, 2, p.top);
       box(cx + 6, armT - 1, 3, 1, shade);
@@ -178,9 +212,27 @@
     } else if (p.camera) {
       box(cx - 1, torsoY + 4, 3, 2, "#1e1e22");
     }
-    if (p.notebook) {
+    if (o.sketching) {
+      /* the pad, held up, with a line or two already on it */
+      box(cx - 6, armT - 1, 9, 8, "#d8cfb6");
+      box(cx - 6, armT - 1, 9, 1, "#a99f88");
+      box(cx - 5, armT + 1, 5, 1, "#8a8272");
+      box(cx - 5, armT + 3, 6, 1, "#8a8272");
+      put(cx + 2, armT + 2, "#5a4632");                /* pencil */
+    } else if (o.mapOut) {
+      /* a folded plan of the building, opened out */
+      box(cx - 6, armT, 12, 7, "#ded4b8");
+      box(cx - 6, armT, 12, 1, "#a99f88");
+      box(cx, armT, 1, 7, "#b8ad92");                  /* the fold */
+      put(cx - 4, armT + 3, "#8a6a2c");
+      put(cx + 3, armT + 4, "#8a6a2c");
+    } else if (p.notebook) {
       box(cx - 8, torsoY + 4, 3, 5, "#d8cfb6");
       box(cx - 8, torsoY + 4, 3, 1, "#a99f88");
+    }
+    if (o.selfie) {
+      box(cx + 6, armT - 8, 4, 6, "#1e1e22");
+      box(cx + 7, armT - 7, 2, 4, "#8fb8d0");
     }
     if (p.stick) box(cx + 7, torsoY + 2, 1, legEnd - torsoY - 1, "#5a4632");
     if (p.staff) {
@@ -240,6 +292,20 @@
       /* Facing the viewer, mid-conversation. */
       talk: bakePose(p, { turn: 0, arm: 0 }),
       talkAlt: bakePose(p, { turn: 1, arm: 1 }),
+      /* Nose almost on the card: what people spend most of a gallery doing. */
+      read: bakePose(p, { back: true, stoop: 1 }),
+      readAlt: bakePose(p, { back: true, stoop: 2, lift: -1 }),
+      /* Copying something down. Scholars and school parties. */
+      sketch: bakePose(p, { back: true, sketching: true }),
+      sketchAlt: bakePose(p, { back: true, sketching: true, stoop: 1 }),
+      /* Turned round with the piece behind them and the phone out. */
+      selfie: bakePose(p, { selfie: true, eyesUp: true }),
+      /* Lost, somewhere near the stairs, with the plan open. */
+      map: bakePose(p, { mapOut: true }),
+      /* Across the room at somebody they know. */
+      wave: bakePose(p, { waving: true }),
+      /* Down at a low case, which is where the good small things live. */
+      crouch: bakePose(p, { crouching: true, back: true, lift: -4, stoop: 1 }),
       w: W, h: H, type, look: p,
     };
     if (cache.size > 300) cache.clear();

@@ -30,7 +30,10 @@
   const EXHIBIT_GAP = 36;        /* clear wall between pieces */
   const DOOR = 64;               /* the arch between two rooms */
   const BENCH_Y = 146;           /* where a bench stands on the floor (local) */
-  const MAX_AGENTS = 56;
+  /* The building is three storeys and fifteen-odd rooms now. Fifty-six people
+     spread over that is about three in any one view, which reads as a museum
+     on a wet Tuesday whatever the header claims. */
+  const MAX_AGENTS = 96;
   const STAIRS_W = 88;
 
   /* The entrance hall, which every museum has and which is where the money
@@ -666,7 +669,117 @@
       didCafe: false,
       didResearch: false,
       amenity: null,   /* { room, kind: 'shop'|'cafe'|'research', x } */
+      /* What they are doing *while* stood at a piece — the difference between
+         a room of statues and a room of people. Set on arrival and re-rolled
+         while they stand there. */
+      act: "look",
+      actTimer: 0,
+      didMap: false,
+      said_bye: false,
+      waving: 0,
+      wavedAt: false,
+      /* How many pieces they will look at on one storey before trying another. */
+      floorVisits: 0,
+      floorQuota: rng.int(3, 6),
+      tour: null,      /* id of the guide they are following, if any */
+      guiding: null,   /* set on a staff agent running a tour */
     };
+  }
+
+  /* Which of the standing behaviours this person does at this piece. Weighted
+     by who they are and what they are looking at: a scholar copies things down,
+     a tourist puts themselves in front of it, a child gets down to the glass. */
+  function pickAct(rng, a, ex) {
+    const def = a.def || {};
+    const tall = ex && ex.h ? ex.h : 20;
+    const opts = [
+      { k: "look", w: 34 },
+      { k: "read", w: 30 },
+    ];
+    if (def.notebook) opts.push({ k: "sketch", w: 46 });
+    else if (a.type === "school") opts.push({ k: "sketch", w: 16 });
+    if (def.camera || (a.sprite && a.sprite.look && a.sprite.look.camera)) {
+      opts.push({ k: "photo", w: 26 });
+      opts.push({ k: "selfie", w: 18 });
+    }
+    if (a.type === "child") {
+      opts.push({ k: "crouch", w: tall < 26 ? 40 : 12 });
+      opts.push({ k: "point", w: 22 });
+    }
+    if (tall >= 52) opts.push({ k: "gaze", w: 34 });   /* stand back, look up */
+    if (a.type === "elder") opts.push({ k: "read", w: 20 });
+    return rng.weighted(opts, (o) => o.w).k;
+  }
+
+  /* ---------- guided tours ---------------------------------------------------
+     One at a time, led by a member of staff, and joined by whoever happens to
+     be standing near when it forms. It is worth the bookkeeping: a clump of
+     people moving through the building together is the single thing that most
+     makes a museum look busy rather than populated. */
+
+  const TOUR_JOIN_RANGE = 110;
+  const TOUR_MAX_PARTY = 6;
+
+  function runTours(state, rng, dt) {
+    let guide = state.guide;
+    /* Retire a guide that has left, or whose tour has run its course. */
+    if (guide && (state.agents.indexOf(guide) < 0 ||
+                  guide.state === "leave" || guide.visits <= 0 ||
+                  (guide.guiding -= dt) <= 0)) {
+      for (const o of state.agents) if (o.tourGuide === guide) { o.tourGuide = null; o.tour = null; }
+      if (guide) guide.guiding = null;
+      guide = state.guide = null;
+      state.tourCooldown = rng.range(40, 110);
+    }
+
+    if (!guide) {
+      state.tourCooldown -= dt;
+      if (state.tourCooldown > 0) return;
+      const free = state.agents.filter((o) =>
+        o.type === "staff" && o.visits > 1 &&
+        (o.state === "walk" || o.state === "view"));
+      if (!free.length) { state.tourCooldown = rng.range(8, 20); return; }
+      guide = state.guide = rng.pick(free);
+      guide.guiding = rng.range(70, 150);      /* seconds of patter left */
+      guide.tourGuide = null;
+      guide.party = 0;
+      return;
+    }
+
+    /* Gather. People near the guide, on the same floor, who are not busy with
+       something of their own, fall in behind. */
+    let party = 0;
+    for (const o of state.agents) if (o.tourGuide === guide) party++;
+    if (party < TOUR_MAX_PARTY && rng.chance(dt * 1.4)) {
+      for (const o of state.agents) {
+        if (party >= TOUR_MAX_PARTY) break;
+        if (o === guide || o.tourGuide || o.type === "staff") continue;
+        if ((o.floor || 0) !== (guide.floor || 0)) continue;
+        if (o.state !== "walk" && o.state !== "view") continue;
+        if (Math.abs(o.x - guide.x) > TOUR_JOIN_RANGE) continue;
+        if (!rng.chance(0.5)) continue;
+        o.tourGuide = guide;
+        o.tour = guide.id;
+        /* Fan the party out around the guide rather than stacking them. */
+        o.groupOffset = (party % 2 ? 1 : -1) * (16 + Math.floor(party / 2) * 15) + rng.range(-4, 4);
+        o.visits = Math.max(o.visits, 3);
+        party++;
+        if (rng.chance(0.3))
+          say(state, o, rng.pick(S7.remarks.TOUR_JOIN), 3.2);
+      }
+    }
+    guide.party = party;
+  }
+
+  /* Ordinary chat, but a third of the time it is about the museum the player
+     has actually built — the price on the door, the crush in the room, how far
+     people travelled, how near it is to closing. */
+  function chatter(rng, state, a) {
+    if (state.mood && rng.chance(0.34)) {
+      const m = S7.remarks.mood(rng, state.mood);
+      if (m) return m;
+    }
+    return S7.remarks.ambient(rng, a.type);
   }
 
   function softCapDwell(S) {
@@ -744,7 +857,8 @@
      here is what freezes the admissions queue and packs at popular plinths. */
   function isAnchored(a) {
     return a.state === "sit" || a.state === "pay" || a.state === "view" ||
-      a.state === "shop" || a.state === "cafe" || a.state === "research";
+      a.state === "shop" || a.state === "cafe" || a.state === "research" ||
+      a.state === "consult";
   }
 
   /* Nudge people out of each other. Without this a popular exhibit ends up
@@ -889,11 +1003,29 @@
      everyone piles up in the first gallery and never reaches the rest. */
   function chooseTarget(rng, L, a) {
     if (!L.exhibits.length) return null;
+    /* On a tour you go where the guide goes. Everything else about walking,
+       routing and stairs is unchanged — a follower is an ordinary visitor
+       whose next piece is chosen for them. */
+    if (a.tourGuide && a.tourGuide.target && a.tourGuide.state !== "leave")
+      return a.tourGuide.target;
     if (!a.seen) a.seen = new Set();
     const unseen = L.exhibits.filter((e) => !a.seen.has(e.a.no));
     if (!unseen.length) return null;
 
     const myFloor = a.floor || 0;
+    /* Do a floor, then change floors — the way people actually walk a museum.
+       Without this, cross-floor picks outscored same-floor ones after the first
+       quarter of a tour and better than a third of all visitor-time went on
+       trudging to and from the stairs, which emptied the galleries. */
+    let unseenHere = 0;
+    for (const e of unseen) {
+      const ef = e.floor !== undefined ? e.floor : (e.room && e.room.floor) || 0;
+      if (ef === myFloor) unseenHere++;
+    }
+    /* ...but a floor is "done" after a handful of pieces, not only when it is
+       exhausted, or nobody would ever reach the upper galleries. */
+    const floorSpent = unseenHere <= 1 || (a.floorVisits || 0) >= (a.floorQuota || 4);
+
     let minX = Infinity, maxX = -Infinity;
     for (const e of L.exhibits) {
       if (e.x < minX) minX = e.x;
@@ -916,10 +1048,9 @@
       score -= Math.abs(e.x - ideal) * 0.18;
       if (e.x > a.x) score += 24 * (1 - done * 0.55);
       else score -= 6 * (1 - done);
-      /* Prefer same floor early; later, send people upstairs. */
-      if (eFloor === myFloor) score += 18;
-      else if (done > 0.25) score += 22;
-      else score -= 12;
+      /* Stay on this floor while it still has anything to show you. */
+      if (eFloor === myFloor) score += floorSpent ? 10 : 70;
+      else score -= floorSpent ? 0 : 85;
       if (e.a.rarity.mult > 2) score += 32;
       if (e.a.rarity.mult > 3.5) score += 18;
       if (e.a.kind === "painting") score += 10;
@@ -984,6 +1115,10 @@
     if (a.seat) { a.seat.taken = null; a.seat = null; }
     a.amenity = null;
     a.target = null;
+    /* Drop out of the tour too, or the party keeps a seat for somebody who has
+       gone home. */
+    a.tourGuide = null;
+    a.tour = null;
   }
 
   function step(state, S, dt, L) {
@@ -1069,6 +1204,19 @@
 
     /* Separation first, then decisions — so approach gets the last word and
        can break traffic jams instead of being undone at the end of the frame. */
+    /* What today feels like from the floor: the ticket against the going rate,
+       how full the rooms are, the museum's standing, and how long is left
+       before closing. Rebuilt each tick and handed to the chatter. */
+    state.mood = {
+      price: S.admission,
+      suggested: S7.museum.suggestedPrice(sv),
+      crowded: MAX_AGENTS ? Math.min(1.4, (state.inside || 0) / MAX_AGENTS) : 0,
+      rating: sv.rating,
+      minutesLeft: open ? S7.museum.CLOSE_AT - S.minute : undefined,
+      minutesOpen: open ? S.minute - S7.museum.OPEN_AT : undefined,
+    };
+
+    runTours(state, rng, dt);
     separate(state, dt);
 
     for (let i = state.agents.length - 1; i >= 0; i--) {
@@ -1143,6 +1291,8 @@
           const to = a.climb ? a.climb.toFloor : 0;
           const after = a.climb ? a.climb.after : null;
           a.floor = to;
+          /* New storey, fresh appetite for it. */
+          a.floorVisits = 0;
           const land = stairsLanding(L, to, from);
           if (land) a.x = land.serviceX || (land.x + land.width / 2);
           a.climb = null;
@@ -1199,6 +1349,16 @@
             if (a.state === "toStairs") continue;
           }
         }
+        /* Everybody gets lost at least once. Stop, open the plan, work out
+           which way the Bronze Age is, carry on. */
+        if (!a.tourGuide && !a.didMap && (a.stateAge || 0) > 3 && rng.chance(dt * 0.045)) {
+          a.didMap = true;
+          a.state = "consult";
+          a.timer = rng.range(2.2, 4.5);
+          a.stateAge = 0;
+          if (rng.chance(0.6)) say(state, a, rng.pick(S7.remarks.LOST), 3.4);
+          continue;
+        }
         const tx = a.target.x + a.groupOffset;
         a.z += (0.35 + (a.id % 7) / 12 - a.z) * dt * 0.6;
         if (approach(a, tx, dt, 1.15, 2.0) || (a.stateAge || 0) > 25) {
@@ -1209,11 +1369,24 @@
           a.stateAge = 0;
           if (!a.seen) a.seen = new Set();
           a.seen.add(a.target.a.no);
+          a.floorVisits = (a.floorVisits || 0) + 1;
           a.timer = rng.range(3, 8) * (a.def.dwell || 1);
+          /* A guide holds the room; a party waits while they do. */
+          if (a.guiding) {
+            a.timer = rng.range(9, 15);
+            a.act = "talkTo";
+            say(state, a, S7.remarks.guide(rng, a.target.a), rng.range(4.5, 7));
+          }
+          /* Almost everyone reads the card before they look at the thing. */
+          a.act = rng.chance(0.5) ? "read" : pickAct(rng, a, a.target);
+          a.actTimer = rng.range(1.6, 3.4);
+          /* A big piece gets looked at from further off. */
+          if (a.target.h >= 52) a.x -= a.dir * rng.range(4, 12);
           if (rng.chance(0.62))
             say(state, a, S7.remarks.forExhibit(rng, a.target.a, a.type), rng.range(3.4, 5.4));
           if ((a.def.camera || a.sprite.look.camera) && rng.chance(0.55)) {
             a.flash = 0.5;
+            a.act = "photo";
             if (rng.chance(0.4)) say(state, a, S7.remarks.forExhibit(rng, a.target.a, "tourist"), 3.6);
           }
         } else if ((a.stuck || 0) > 6) {
@@ -1226,7 +1399,20 @@
         }
       } else if (a.state === "view") {
         a.timer -= dt;
-        if (a.target && !a.bubble && rng.chance(dt * 0.22))
+        /* Nobody holds one attitude for eight seconds. Roll a new one now and
+           then, and let the line they say match what they are doing. */
+        a.actTimer -= dt;
+        if (a.actTimer <= 0) {
+          const was = a.act;
+          a.act = pickAct(rng, a, a.target);
+          a.actTimer = rng.range(1.8, 3.6);
+          if (a.act === "photo") a.flash = 0.45;
+          if (a.act !== was && a.target && !a.bubble && rng.chance(0.34))
+            say(state, a, S7.remarks.forAct(rng, a.act, a.target.a, a.type), rng.range(3, 4.6));
+        }
+        if (a.guiding && a.target && !a.bubble && rng.chance(dt * 0.5)) {
+          say(state, a, S7.remarks.guide(rng, a.target.a), rng.range(4, 6.5));
+        } else if (a.target && !a.bubble && rng.chance(dt * 0.22))
           say(state, a, S7.remarks.forExhibit(rng, a.target.a, a.type), rng.range(3.2, 5));
         if (a.timer <= 0) {
           a.visits--;
@@ -1240,6 +1426,13 @@
             if (seat) { seat.taken = a.id; a.seat = seat; a.state = "toSeat"; a.stateAge = 0; }
             else if (!maybeAmenity(rng, L, a, S, false)) a.state = "walk";
           } else if (!maybeAmenity(rng, L, a, S, false)) a.state = "walk";
+        }
+      } else if (a.state === "consult") {
+        a.timer -= dt;
+        if (a.timer <= 0 || (a.stateAge || 0) > 8) {
+          a.state = "walk";
+          a.stateAge = 0;
+          a.stuck = 0;
         }
       } else if (a.state === "toAmenity") {
         if (!a.amenity || !isFinite(a.amenity.x)) {
@@ -1389,7 +1582,8 @@
         }
       } else if (a.state === "sit") {
         a.timer -= dt;
-        if (!a.bubble && rng.chance(dt * 0.10)) say(state, a, S7.remarks.ambient(rng, a.type), rng.range(3.2, 5));
+        if (!a.bubble && rng.chance(dt * 0.10))
+          say(state, a, chatter(rng, state, a), rng.range(3.2, 5));
         if (a.timer <= 0 || (a.stateAge || 0) > 40) {
           const wasCafe = a.amenity && a.amenity.phase === "cafeSit";
           if (a.seat) { a.seat.taken = null; a.seat = null; }
@@ -1432,6 +1626,16 @@
           a.stateAge = 0;
         }
         a.z += (0.86 - a.z) * dt * 0.8;
+        /* A word on the way out, and a hand up to the desk as they pass it.
+           People arriving are a queue; people leaving used to be a silence. */
+        if (!a.said_bye && a.x < DESK_X + 40 && rng.chance(0.55)) {
+          a.said_bye = true;
+          say(state, a, rng.pick(S7.remarks.LEAVING), rng.range(3, 4.4));
+        }
+        if (a.x < DESK_X + 26 && a.x > DOOR_X + 6) {
+          a.waving = (a.waving || 0) > 0 ? a.waving - dt : (a.wavedAt ? 0 : 1.1);
+          if (!a.wavedAt && rng.chance(dt * 1.6)) a.wavedAt = true;
+        } else a.waving = 0;
         if (approach(a, DOOR_X - 30, dt, 1.45, 3.0) || a.x <= DOOR_X - 28 ||
             (a.stateAge || 0) > 30) {
           releaseAgent(a);
@@ -1455,7 +1659,7 @@
             : samePiece && rng.chance(0.5)
               ? [S7.remarks.forExhibit(rng, a.target.a, a.type),
                  S7.remarks.forExhibit(rng, b.target.a, b.type)]
-              : [S7.remarks.ambient(rng, a.type), S7.remarks.ambient(rng, b.type)];
+              : [chatter(rng, state, a), chatter(rng, state, b)];
           say(state, a, lines[0], 3.6);
           b.pendingReply = { text: lines[1], delay: 1.5 };
           a.chatCooldown = rng.range(12, 30);
@@ -1477,6 +1681,8 @@
       agents: [],
       spawnTimer: 0,
       chatTimer: 1,
+      guide: null,          /* the staff member currently running a tour */
+      tourCooldown: 25,
       ticket: 1,
       doorTimer: 0,
       crowd: 0,

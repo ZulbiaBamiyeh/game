@@ -290,6 +290,51 @@ function serve() {
     return { suggested, rows, bestAt: best.x, penalty: +(1 - atRate.day / best.day).toFixed(3) };
   });
 
+  /* The crowd has to be doing things, not just walking. Watch a stocked museum
+     for a few seconds and check that the standing behaviours all fire, that
+     somebody gets lost, that a tour forms, and that the room does not say the
+     same eight things over and over. */
+  const life = await page.evaluate(() => {
+    /* Drive the crowd directly rather than watching the real-time loop: the
+       simulation is a pure function of state, so a few thousand ticks run in
+       milliseconds and we see a whole day of behaviour instead of six seconds
+       of it. */
+    const S = S7.state.fresh(31337);
+    S.started = true;
+    S.up.upper = 1; S.up.shop = 2; S.up.cafe = 1; S.up.lighting = 4;
+    S.bonus.capacity = 90;
+    S.mul.visitors = 2.2; S.mul.rating = 1.7;
+    S.minute = 10 * 60;
+    for (let i = 0; i < 34; i++) {
+      const a = S7.artifacts.makeArtifact((Math.random() * 1e9) | 0, 6 + i * 23);
+      a.no = "L" + i; a.display = true; S.collection.push(a);
+    }
+    S7.state.recompute(S);
+    S7.visitors.invalidate();
+
+    const crowd = S7.visitors.create(9182736);
+    const acts = {}, states = {}, said = new Set();
+    let tour = false, party = 0;
+    for (let t = 0; t < 4000; t++) {
+      const L = S7.visitors.getLayout(S);
+      S7.game.step(S, 0.25);
+      S7.visitors.step(crowd, S, 0.25, L);
+      for (const a of crowd.agents) {
+        states[a.state] = (states[a.state] || 0) + 1;
+        if (a.state === "view" && a.act) acts[a.act] = (acts[a.act] || 0) + 1;
+        if (a.bubble) said.add(a.bubble.text);
+      }
+      if (crowd.guide) { tour = true; party = Math.max(party, crowd.guide.party || 0); }
+    }
+    const total = Object.values(states).reduce((x, y) => x + y, 0) || 1;
+    return {
+      acts: Object.keys(acts).sort(), states: Object.keys(states).sort(),
+      lines: said.size, tour, party,
+      stairFrac: +((states.toStairs || 0) / total).toFixed(3),
+      viewFrac: +((states.view || 0) / total).toFixed(3),
+    };
+  });
+
   /* Physical sizes should span from bead to monument, not cluster on one value. */
   const sizes = await page.evaluate(() => {
     const hs = [];
@@ -344,6 +389,10 @@ function serve() {
               Math.round(pricing.penalty * 100) + "%");
   console.log("artifact sizes:", JSON.stringify(sizes));
   console.log("museum layout:", rehang);
+  console.log("crowd life: acts", life.acts.join("/"), "· lines", life.lines,
+              "· tour", life.tour ? "yes (party " + life.party + ")" : "no",
+              "· stairs", Math.round(life.stairFrac * 100) + "%",
+              "· at a piece", Math.round(life.viewFrac * 100) + "%");
   console.log("console errors:", errors.length ? errors.slice(0, 20) : "none");
 
   /* The live curve is the one that matters. The isolated scale table only
@@ -360,7 +409,11 @@ function serve() {
                  busiest > 12000 ||                /* and neither is hour two */
                  dearest > 40 ||                    /* nobody pays £40 to see a shaft */
                  pricing.bestAt > 1.5 || pricing.bestAt < 0.75 ||
-                 pricing.penalty > 0.05;   /* the going rate must be honest advice */
+                 pricing.penalty > 0.05 ||  /* the going rate must be honest advice */
+                 life.acts.length < 5 ||   /* a room of statues is not a museum */
+                 life.lines < 60 ||        /* nor is a room saying eight things */
+                 !life.tour ||             /* a tour should form over a whole day */
+                 life.stairFrac > 0.15;    /* people should be looking, not climbing */
   if (failed) { console.error("\nSMOKE FAILED"); process.exit(1); }
   console.log("\nSMOKE OK");
 })();

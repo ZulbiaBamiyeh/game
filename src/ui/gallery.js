@@ -425,27 +425,21 @@
     /* Horizontal only. A radial pool falls off vertically as well, which left
        the bottom of the hanging zone — exactly where the art is — darkened and
        never lit back up. Wall washers throw an even column. */
-    for (let lx = Math.ceil(x0 / pitch) * pitch; lx < x0 + w; lx += pitch) {
+    const span = visibleSpan(x0, w, pitch);
+    const wide = Math.round(pitch * 2 * SCALE);
+    for (let lx = span.from; lx < span.to; lx += pitch) {
       const g = ctx.createLinearGradient(sx(lx - pitch), 0, sx(lx + pitch), 0);
       g.addColorStop(0, "rgba(" + warm + ",0)");
       g.addColorStop(0.5, "rgba(" + warm + "," + strength.toFixed(3) + ")");
       g.addColorStop(1, "rgba(" + warm + ",0)");
       ctx.fillStyle = g;
-      ctx.fillRect(sx(lx - pitch), syR(washTop),
-                   Math.round(pitch * 2 * SCALE), Math.round(washH * SCALE));
+      ctx.fillRect(sx(lx - pitch), syR(washTop), wide, Math.round(washH * SCALE));
+      /* and a touch of it reaching the wainscot below the dado */
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(sx(lx - pitch), syR(dado + 4), wide,
+                   Math.round((FLOOR_Y - dado - 10) * SCALE));
+      ctx.globalAlpha = 1;
     }
-    /* and a touch of it reaching the wainscot below the dado */
-    ctx.globalAlpha = 0.5;
-    for (let lx = Math.ceil(x0 / pitch) * pitch; lx < x0 + w; lx += pitch) {
-      const g = ctx.createLinearGradient(sx(lx - pitch), 0, sx(lx + pitch), 0);
-      g.addColorStop(0, "rgba(" + warm + ",0)");
-      g.addColorStop(0.5, "rgba(" + warm + "," + strength.toFixed(3) + ")");
-      g.addColorStop(1, "rgba(" + warm + ",0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(sx(lx - pitch), syR(dado + 4),
-                   Math.round(pitch * 2 * SCALE), Math.round((FLOOR_Y - dado - 10) * SCALE));
-    }
-    ctx.globalAlpha = 1;
   }
 
   /* Runner carpet down the centre of a gallery. */
@@ -512,6 +506,17 @@
     return Math.max(28, 52 - (fac ? fac.lighting : 0) * 2);
   }
 
+  /* Where to start and stop a loop that steps along a room on the light pitch.
+     A hall can be eight hundred world pixels wide and the frame shows seven
+     hundred of four thousand, so walking the whole room to build a gradient per
+     fitting was most of a frame's work for light nobody could see. */
+  function visibleSpan(x0, w, pitch, margin) {
+    const m = margin === undefined ? pitch : margin;
+    const from = Math.max(x0, camX - m);
+    const to = Math.min(x0 + w, camX + VIEW_W + m);
+    return { from: Math.ceil(from / pitch) * pitch, to };
+  }
+
   function drawCeiling(x0, w, dim) {
     const light = fac ? fac.lighting : 0;
     const pitch = lightPitch();
@@ -521,7 +526,8 @@
     rect(x0, WALL_TOP - 8, w, 4, C.cove);
     rect(x0, WALL_TOP - 8, w, 1, light >= 2 ? "#6a5c42" : C.coveLit);
     rect(x0, WALL_TOP - 4, w, 4, C.ceilShade);
-    for (let lx = Math.ceil(x0 / pitch) * pitch; lx < x0 + w; lx += pitch) {
+    const span = visibleSpan(x0, w, pitch, 40);
+    for (let lx = span.from; lx < span.to; lx += pitch) {
       rect(lx - 3, WALL_TOP - 4, 7, 3, "#3a332a");
       rect(lx - 2, WALL_TOP - 2, 5, 1, bulb);
       const g = ctx.createRadialGradient(sx(lx), syR(WALL_TOP - 2), 1, sx(lx), syR(WALL_TOP - 2), 30 + light);
@@ -1809,15 +1815,31 @@
     ctx.ellipse(sx(a.x), sy(y), 13, 3.5, 0, 0, 6.283);
     ctx.fill();
 
+    /* Alternate between two frames of whatever they are doing, off a clock
+       offset per person, so a room of readers is not a room of clones. */
+    const beat = (rate) => Math.floor(now * rate + a.id * 0.37) % 2;
+
     let frame, flip = false;
     if (a.state === "sit") {
       frame = s.sit;
     } else if (a.state === "pay") {
       frame = s.stand;
+    } else if (a.state === "consult") {
+      frame = s.map;
+    } else if (a.waving > 0 && s.wave) {
+      frame = s.wave;
     } else if (a.state === "view") {
       if (a.flash > 0) frame = s.photo;
-      else if (a.bubble) frame = Math.floor(now * 1.6 + a.id) % 2 ? s.point : s.back;
-      else frame = Math.floor(now * 0.7 + a.id * 0.37) % 2 ? s.backLean : s.back;
+      else if (a.act === "talkTo") frame = beat(1.5) ? s.talkAlt : s.talk;
+      else if (a.bubble) frame = beat(1.6) ? s.point : s.back;
+      else if (a.act === "read") frame = beat(0.5) ? s.readAlt : s.read;
+      else if (a.act === "sketch") frame = beat(2.2) ? s.sketchAlt : s.sketch;
+      else if (a.act === "selfie") frame = s.selfie;
+      else if (a.act === "photo") frame = s.photo;
+      else if (a.act === "point") frame = beat(1.2) ? s.point : s.back;
+      else if (a.act === "crouch") frame = s.crouch;
+      else if (a.act === "gaze") frame = beat(0.45) ? s.back : s.backLean;
+      else frame = beat(0.7) ? s.backLean : s.back;
     } else {
       /* six-frame walk, stepping at a rate that matches how fast they move */
       frame = s.walk[Math.floor(a.phase) % 6];

@@ -279,26 +279,66 @@ and a `+£4` floats off them and fades. Then they go and look at the art.
 
 **The crowd.** Visitors are pixel people generated from a seed like everything
 else, 18×24, baked once into a six-frame walk (contact, down, pass, ×2 — the
-shortest cycle that reads as weight moving rather than legs scissoring) plus
-poses for standing, looking, photographing, pointing, sitting and talking. Seven
-archetypes — adult, child, tourist, scholar, school group, elder, staff — each
-with its own gait, dwell time, accessories and vocabulary. Proportions carry the
-read at this size, not detail: shoulders are 8 pixels and the head is 5, because
-a head as wide as the body is a column, not a person.
+shortest cycle that reads as weight moving rather than legs scissoring) plus a
+pose for everything they do. Seven archetypes — adult, child, tourist, scholar,
+school group, elder, staff — each with its own gait, dwell time, accessories and
+vocabulary. Proportions carry the read at this size, not detail: shoulders are 8
+pixels and the head is 5, because a head as wide as the body is a column, not a
+person.
 
 How many are in the building is `arrivals per minute × dwell minutes`, capped at
-42 — which is as many as a strip of rooms can legibly hold. A separation pass
-pushes people out of each other in both x and depth, so a popular exhibit gets a
-cluster rather than six sprites in one pixel.
+96. A separation pass pushes people out of each other in both x and depth, so a
+popular exhibit gets a cluster rather than six sprites in one pixel.
+
+**Standing at a piece is not one behaviour.** On arrival, and again every couple
+of seconds, a visitor picks an action weighted by who they are and what they are
+looking at:
+
+| Action | Who does it | What it looks like |
+|---|---|---|
+| `read` | everyone, most of all | nose almost on the card, head dipped |
+| `look` | everyone | back turned, weight shifting |
+| `gaze` | anyone, at a piece ≥ 52px | steps back a few paces and looks up |
+| `sketch` | scholars, some school parties | pad up, pencil working |
+| `photo` | anyone carrying a camera | both elbows up, shutter flash |
+| `selfie` | tourists | turned round, arm out, phone at the end of it |
+| `point` | children | "look at its FACE" |
+| `crouch` | children, at low cases | down at the glass, knees under the chin |
+
+They also get lost — once per visit, a visitor stops mid-walk, opens the plan,
+works out which way the Bronze Age is, and carries on. And a floor is walked as a
+floor: `chooseTarget` strongly prefers the storey you are already on until you
+have seen three to six things on it, because without that rule cross-floor picks
+outscored same-floor ones and better than a third of all visitor-time went on
+trudging to and from the stairs. It is now about seven per cent.
+
+**Guided tours.** One at a time, led by a member of staff, joined by whoever is
+standing within about a hundred pixels when it forms, up to a party of six. A
+follower is an ordinary visitor whose next piece is chosen for them — everything
+about walking, routing and stairs is unchanged — so the whole feature is a field
+on the agent and a dozen lines of bookkeeping. It is worth it: a clump of people
+moving through the building together is the single thing that most makes a museum
+look busy rather than merely populated.
 
 **What they say** is picked from weighted buckets, most specific first: the
 object's class, its specific type, its tradition, its condition, its rarity, and
-its `eerie` tier — then who is speaking, then ambient chatter that has nothing to
-do with the art and is mostly about the café. Two visitors looking at the same
-thing can fall into a scripted exchange. The result is that a Benin head gets
-"lost-wax casting, and they were doing it better than Europe was", a Jōmon figure
-gets "every single one that's ever been found was broken before it was buried, on
-purpose", and the unattributed rooms get "can we go to the next room. Please."
+its `eerie` tier — then what they are *doing* (a line about the label when they
+lean in to read it, about scale when they step back), then who is speaking, then
+ambient chatter that has nothing to do with the art and is mostly about the café.
+Two visitors looking at the same thing can fall into a scripted exchange. The
+result is that a Benin head gets "lost-wax casting, and they were doing it better
+than Europe was", a Jōmon figure gets "every single one that's ever been found
+was broken before it was buried, on purpose", and the unattributed rooms get "can
+we go to the next room. Please."
+
+**And they notice what you have done.** A third of ambient chatter comes from
+`mood`, which is handed the ticket price against the going rate, how full the
+rooms are, the museum's rating and how long is left before closing. Charge well
+over the going rate and you hear about it — *"for what they're charging I want to
+see every room."* Charge under it and you hear about that too. Fill the place and
+somebody complains they can't get near the case; empty it and somebody says it
+deserves a crowd. It is the cheapest possible feedback channel on the player's
+decisions and by some distance the most convincing one.
 
 Rendering runs at two resolutions on one canvas, deliberately: the world is drawn
 at an integer 2× so artifacts land 1:1 and people 3:1 with no fractional
