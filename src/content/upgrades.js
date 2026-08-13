@@ -13,7 +13,7 @@
 
   const EXCAVATION = [
     { id: "crew", name: "Take on a digger", base: 8, mul: 1.19, max: 18,
-      desc: (l) => "Faster clearing. " + (l + 1) + " people on the face.",
+      desc: (l) => "Faster clearing. " + (l + 1) + (l === 0 ? " person" : " people") + " on the face.",
       flavour: "Somebody has to bag the spoil.",
       unlock: () => true },
 

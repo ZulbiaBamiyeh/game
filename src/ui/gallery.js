@@ -209,23 +209,40 @@
     const total = layoutCache ? layoutCache.total : VIEW_W;
     return Math.max(0, Math.min(Math.max(0, total - VIEW_W), x));
   };
+  /* How much roof / deposit may show past the ends of the building. Enough to
+     say "this is a building standing on the ground", not so much that a
+     quarter of the frame is spent on dirt. */
+  const OVERSHOOT = 58;
+
+  /* The vertical range the camera may travel over is the storeys you have
+     actually opened — not the shell. The shell always carries a sealed upper
+     and a sealed basement so there is never a black hole behind the building,
+     but a museum that is one room should not spend forty per cent of the frame
+     showing you an empty cellar you cannot enter yet. */
+  function openRangeY() {
+    const L = layoutCache;
+    if (!L) return { top: 0, bottom: V.H };
+    const maxF = L.maxFloor !== undefined ? L.maxFloor : 0;
+    const minF = L.minFloor !== undefined ? L.minFloor : 0;
+    return { top: V.floorBase(maxF), bottom: V.floorBase(minF) + V.H };
+  }
+
   const clampCamY = (y) => {
-    const yMin = layoutCache ? (layoutCache.yMin !== undefined ? layoutCache.yMin : 0) : 0;
-    const yMax = layoutCache
-      ? (layoutCache.yMax !== undefined ? layoutCache.yMax : (layoutCache.totalH || V.H))
-      : VIEW_H;
-    /* Tall canvases used to pin the camera so the basement could never sit in
-       the upper half of the view. Allow enough travel that any storey's wall
-       mid-height can land near the focus band (≈36% down the frame). */
-    const focusBand = VIEW_H * 0.36;
-    const lo = yMin + FLOOR_Y * 0.2 - focusBand;
-    const hi = Math.max(lo, yMax - FLOOR_Y * 0.35 - focusBand);
+    const { top, bottom } = openRangeY();
+    const lo = top - OVERSHOOT;
+    const hi = bottom + OVERSHOOT - VIEW_H;
+    /* Fewer open storeys than the frame can hold: centre them, so the sealed
+       ones sit as equal slivers above and below instead of one fat empty one. */
+    if (hi <= lo) return (top + bottom) / 2 - VIEW_H / 2;
     return Math.max(lo, Math.min(hi, y));
   };
 
   /* Floor-local box of the room intro board (world y = floorBase + y). */
+  /* Wide enough for two lines of gallery name at 11px plus the period under
+     it. The old 38 was sized for text that got truncated to fit it, which is
+     the wrong way round. */
   function boardBox(r) {
-    return { x: r.x + 10, y: 38, w: 38, h: 48, floor: r.floor || 0 };
+    return { x: r.x + 14, y: 36, w: 56, h: 54, floor: r.floor || 0 };
   }
 
   /* Exhibit first, then room boards. */
@@ -392,6 +409,43 @@
     rect(x0, FLOOR_Y - 6, w, 6, C.skirt);
     rect(x0, FLOOR_Y - 6, w, 1, "#8a7350");
     rect(x0, FLOOR_Y - 1, w, 1, "#2a2317");
+
+    /* Wall wash. A gallery wall is not one flat tone from end to end — it is
+       bright under each fitting and falls away between them, and that
+       modulation is most of why a photograph of a gallery looks like one. Take
+       a little off the whole wall, then put it back in pools on the light
+       pitch, so the average holds and the wall stops reading as paint. */
+    const pitch = lightPitch();
+    const washTop = WALL_TOP + 2, washH = dado - WALL_TOP - 2;
+    ctx.globalAlpha = 0.15;
+    rect(x0, washTop, w, washH, "#000000");
+    ctx.globalAlpha = 1;
+    const warm = fac && fac.lighting >= 3 ? "255,232,182" : "255,222,164";
+    const strength = 0.17 + Math.min(0.10, (fac ? fac.lighting : 0) * 0.014);
+    /* Horizontal only. A radial pool falls off vertically as well, which left
+       the bottom of the hanging zone — exactly where the art is — darkened and
+       never lit back up. Wall washers throw an even column. */
+    for (let lx = Math.ceil(x0 / pitch) * pitch; lx < x0 + w; lx += pitch) {
+      const g = ctx.createLinearGradient(sx(lx - pitch), 0, sx(lx + pitch), 0);
+      g.addColorStop(0, "rgba(" + warm + ",0)");
+      g.addColorStop(0.5, "rgba(" + warm + "," + strength.toFixed(3) + ")");
+      g.addColorStop(1, "rgba(" + warm + ",0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(sx(lx - pitch), syR(washTop),
+                   Math.round(pitch * 2 * SCALE), Math.round(washH * SCALE));
+    }
+    /* and a touch of it reaching the wainscot below the dado */
+    ctx.globalAlpha = 0.5;
+    for (let lx = Math.ceil(x0 / pitch) * pitch; lx < x0 + w; lx += pitch) {
+      const g = ctx.createLinearGradient(sx(lx - pitch), 0, sx(lx + pitch), 0);
+      g.addColorStop(0, "rgba(" + warm + ",0)");
+      g.addColorStop(0.5, "rgba(" + warm + "," + strength.toFixed(3) + ")");
+      g.addColorStop(1, "rgba(" + warm + ",0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(sx(lx - pitch), syR(dado + 4),
+                   Math.round(pitch * 2 * SCALE), Math.round((FLOOR_Y - dado - 10) * SCALE));
+    }
+    ctx.globalAlpha = 1;
   }
 
   /* Runner carpet down the centre of a gallery. */
@@ -452,9 +506,15 @@
 
   /* Coved ceiling with recessed downlights. Spacing tightens as lighting is
      upgraded; bare fittings start as dim and warm up with each purchase. */
+  /* Spacing of the ceiling track. Shared with drawWall so the pools of light on
+     the wall land under the fittings that are making them. */
+  function lightPitch() {
+    return Math.max(28, 52 - (fac ? fac.lighting : 0) * 2);
+  }
+
   function drawCeiling(x0, w, dim) {
     const light = fac ? fac.lighting : 0;
-    const pitch = Math.max(28, 52 - light * 2);
+    const pitch = lightPitch();
     const glow = (0.08 + Math.min(0.22, light * 0.018)) * (dim ? 0.45 : 1);
     const bulb = dim ? "#a89870" : light >= 4 ? "#fff1c4" : light >= 1 ? "#ffe6ad" : "#c4a86a";
     rect(x0, 0, w, WALL_TOP - 8, dim ? "#0c0a07" : C.ceil);
@@ -1279,6 +1339,151 @@
       ctx.fillRect(sx(px), sy(y + 2), Math.round(3 * SCALE), Math.round(5 * SCALE));
   }
 
+  /* ---------- roof and foundation --------------------------------------------
+     The top storey used to end in black, and so did the basement, which put a
+     fifth of the frame into void at both extremes and made the building look
+     like a cross-section of nothing. A cutaway needs a top and a bottom.
+
+     Above: a parapet, a lead deck and rooflights, with the night sky and the
+     town's glow behind it. Below: the deposit itself — the strata the shaft is
+     cutting, which is the whole reason the museum is standing here. */
+
+  const ROOF_H = 96;
+  const BASE_H = 150;
+
+  function envelopeSpan() {
+    const x0 = Math.min(0, camX - 40);
+    const w = Math.max((layoutCache ? layoutCache.total : VIEW_W) + 80,
+                       camX + VIEW_W + 80) - x0;
+    return { x0, w };
+  }
+
+  function drawRoof(topFloor) {
+    const { x0, w } = envelopeSpan();
+    const deck = V.floorBase(topFloor);          /* underside of the parapet */
+    if (sy(deck) < -40) return;                  /* far below the frame */
+
+    /* Night sky, and the sodium wash a town throws up at its own low cloud. */
+    const skyTop = deck - ROOF_H;
+    const g = ctx.createLinearGradient(0, sy(skyTop - 220), 0, sy(deck));
+    g.addColorStop(0, "#080a11");
+    g.addColorStop(0.55, "#13151b");
+    g.addColorStop(1, "#221b15");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, sy(skyTop - 220), CW, Math.round((deck - skyTop + 220) * SCALE));
+
+    /* A few stars, on a fixed lattice so they do not crawl when you pan. */
+    ctx.fillStyle = "#5d6478";
+    for (let i = 0; i < 80; i++) {
+      const wx = x0 + ((i * 137) % Math.max(1, w));
+      const wy = skyTop - 200 + ((i * 61) % 190);
+      if (wy > deck - 54) continue;
+      ctx.fillRect(sx(wx), sy(wy), 2, 2);
+    }
+
+    /* Everything below is packed into the 46 world pixels the camera will
+       actually show above the top storey — a roof you cannot see is just a
+       band of dark, which is what this was before. */
+
+    /* Rooflights: the reason the top gallery is the brightest one. */
+    for (let px = Math.ceil((x0 + 70) / 190) * 190; px < x0 + w - 70; px += 190) {
+      ctx.globalAlpha = 0.2;
+      const rg = ctx.createLinearGradient(0, sy(deck - 44), 0, sy(deck - 96));
+      rg.addColorStop(0, "#cfe2ee");
+      rg.addColorStop(1, "#cfe2ee00");
+      ctx.fillStyle = rg;
+      ctx.fillRect(sx(px - 44), sy(deck - 96), Math.round(88 * SCALE), Math.round(52 * SCALE));
+      ctx.globalAlpha = 1;
+      /* the lantern itself, a shallow pitch of glass in a lead kerb */
+      rect(px - 30, deck - 44, 60, 4, "#3f382a");
+      rect(px - 27, deck - 40, 54, 11, "#46586a");
+      rect(px - 26, deck - 39, 24, 9, "#66838f");
+      rect(px - 1, deck - 40, 2, 11, "#2b2a24");
+      rect(px - 30, deck - 29, 60, 3, "#241f16");
+    }
+
+    /* Lead deck, falling to a gutter behind the parapet. */
+    rect(x0, deck - 29, w, 15, "#1e1b14");
+    for (let px = Math.ceil(x0 / 28) * 28; px < x0 + w; px += 28)
+      rect(px, deck - 29, 1, 15, "#15120c");
+    rect(x0, deck - 17, w, 3, "#141109");
+
+    /* Parapet: brick, then a coping course along the very top. */
+    rect(x0, deck - 14, w, 14, "#2b2519");
+    rect(x0, deck - 14, w, 3, "#463d29");
+    rect(x0, deck - 11, w, 1, "#221c12");
+    for (let px = Math.ceil(x0 / 32) * 32; px < x0 + w; px += 32)
+      rect(px, deck - 11, 2, 11, "#231d13");
+    rect(x0, deck - 3, w, 3, "#181409");
+
+    /* A stack, so the roofline is not a ruled edge. */
+    const st = x0 + Math.min(w * 0.28, 340);
+    rect(st - 10, deck - 62, 20, 48, "#2a2318");
+    rect(st - 12, deck - 66, 24, 5, "#3d3325");
+    rect(st - 10, deck - 62, 20, 2, "#473c28");
+    rect(st - 7, deck - 66, 5, 3, "#15120c");
+    rect(st + 2, deck - 66, 5, 3, "#15120c");
+  }
+
+  function drawFoundation(bottomFloor) {
+    const { x0, w } = envelopeSpan();
+    const grade = V.floorBase(bottomFloor) + V.H;   /* underside of the lowest slab */
+    if (sy(grade) > CH + 40) return;
+
+    /* Footings. Fill the whole band with made ground first and then set the
+       piers into it — drawing only the piers left the gaps between them
+       unpainted, so the bottom of the building read as a row of black teeth. */
+    rect(x0, grade, w, 8, "#31291a");
+    rect(x0, grade, w, 2, "#4a3f29");
+    rect(x0, grade + 6, w, 2, "#1c1710");
+    /* Fill right down to where the strata start, or the five pixels under the
+       pads stay unpainted and read as a shadow line. */
+    for (let k = 0; k < 25; k++) {
+      const t = k / 24;
+      rect(x0, grade + 8 + k, w, 1, t < 0.4 ? "#2b2317" : t < 0.75 ? "#262014" : "#221c12");
+    }
+    for (let px = Math.ceil(x0 / 74) * 74; px < x0 + w; px += 74) {
+      rect(px - 15, grade + 8, 30, 20, "#372e1e");
+      rect(px - 15, grade + 8, 30, 1, "#4f4229");
+      rect(px - 15, grade + 8, 1, 20, "#463a25");
+      rect(px + 14, grade + 8, 1, 20, "#241e13");
+      rect(px - 12, grade + 28, 24, 5, "#3b3121");
+      rect(px - 12, grade + 28, 24, 1, "#4a3e28");
+    }
+
+    /* The deposit. Bands of it, getting darker and more compacted downward —
+       the same material the shaft is cutting, drawn under its own museum. */
+    const bands = [
+      { h: 18, a: "#33291a", b: "#2a2115" },
+      { h: 22, a: "#3a2c1b", b: "#2e2416" },
+      { h: 24, a: "#2b2418", b: "#221c12" },
+      { h: 28, a: "#332a1e", b: "#261f15" },
+      { h: 32, a: "#211b13", b: "#19140e" },
+      { h: 38, a: "#191510", b: "#100e0a" },
+    ];
+    let y = grade + 33;
+    for (let i = 0; i < bands.length; i++) {
+      const bd = bands[i];
+      if (sy(y) > CH + 20) break;
+      for (let k = 0; k < bd.h; k++)
+        rect(x0, y + k, w, 1, (k + i) % 3 ? bd.a : bd.b);
+      /* the bedding plane at the top of each band, wavering slightly */
+      for (let px = x0; px < x0 + w; px += 4) {
+        const j = ((Math.floor(px / 4) * 2654435761) >>> 0) % 3;
+        rect(px, y + j - 1, 4, 1, "#0d0b07");
+      }
+      /* stones and sherds caught in the section */
+      for (let k = 0; k < 5; k++) {
+        const px = x0 + ((i * 313 + k * 197) % Math.max(1, w));
+        rect(px, y + 6 + (k % 3) * 5, 4, 3, i < 3 ? "#3a3124" : "#2a2419");
+      }
+      y += bd.h;
+    }
+    /* Whatever is below the last band is simply more of it. */
+    ctx.fillStyle = "#0b0906";
+    ctx.fillRect(0, sy(y), CW, Math.max(0, CH - sy(y)));
+  }
+
   /* ---------- the entrance hall ---------------------------------------------
      Street doors, daylight, admissions desk. The gift shop is its own room. */
   function drawFoyer(r) {
@@ -1355,25 +1560,52 @@
   }
 
   function drawDoorway(x0) {
-    /* a dark arch, with the next room implied beyond it */
+    /* An opening, not a black slab. The old one painted everything beyond the
+       jamb darker than the wall, so a doorway read as a hole cut in the
+       building. A room you can see into is lighter than the wall around it,
+       and the giveaway is the strip of lit floor running away from you. */
     const DW = V.DOOR || 58;
     rect(x0, WALL_TOP - 6, DW, 6, "#191409");
     rect(x0, WALL_TOP, DW, FLOOR_Y - WALL_TOP, C.wallShade);
+
     const dx = x0 + 10, dw = DW - 20;
-    rect(dx, 34, dw, FLOOR_Y - 34, C.door);
-    /* the far wall and floor of whatever is through there, dimly */
-    rect(dx + 2, 46, dw - 4, 44, "#1b1710");
-    rect(dx + 2, 90, dw - 4, FLOOR_Y - 90, "#231d14");
-    rect(dx + 2, 62, dw - 4, 1, "#2b2418");
-    rect(dx - 2, 32, dw + 4, 3, C.arch);
-    rect(dx - 2, 32, 2, FLOOR_Y - 32, C.arch);
-    rect(dx + dw, 32, 2, FLOOR_Y - 32, C.arch);
-    /* light spilling through onto the floor */
+    const head = 30;
+
+    /* Reveal: the thickness of the wall you are looking through. */
+    rect(dx - 3, head - 2, dw + 6, FLOOR_Y - head + 2, "#171208");
+    rect(dx - 3, head - 2, 3, FLOOR_Y - head + 2, "#3b3423");
+    rect(dx + dw, head - 2, 3, FLOOR_Y - head + 2, "#181308");
+    rect(dx - 3, head - 2, dw + 6, 3, "#443b28");
+
+    /* The room beyond: back wall in shadow, then its floor coming forward and
+       getting lighter, because that is where its own lights are landing. */
+    rect(dx, head + 1, dw, 40, "#241e14");
+    rect(dx, head + 1, dw, 1, "#2c2517");
+    rect(dx, head + 41, dw, 4, "#2f2718");        /* skirting over there */
+    for (let y = head + 45; y < FLOOR_Y; y++) {
+      const t = (y - head - 45) / Math.max(1, FLOOR_Y - head - 45);
+      rect(dx, y, dw, 1, t < 0.3 ? "#3a3020" : t < 0.68 ? "#463a26" : "#50432c");
+    }
+    /* a warm pool from the next room's track, seen edge-on */
+    ctx.globalAlpha = 0.16;
+    rect(dx + 3, head + 44, dw - 6, FLOOR_Y - head - 44, "#ffd188");
+    ctx.globalAlpha = 1;
+    /* somebody's silhouette in the next gallery, once in a while */
+    if ((Math.floor(x0 / 7) % 3) === 0) {
+      const px = dx + Math.round(dw * 0.62);
+      rect(px - 3, FLOOR_Y - 26, 6, 22, "#2a2418");
+      rect(px - 2, FLOOR_Y - 31, 4, 5, "#332b1d");
+    }
+
+    /* Threshold, and the light that falls out of the opening onto this floor. */
+    rect(dx, FLOOR_Y - 3, dw, 3, "#5a4c31");
     for (let y = FLOOR_Y; y < V.H; y++) {
       const t = (y - FLOOR_Y) / (V.H - FLOOR_Y);
-      rect(x0, y, DW, 1, t < 0.35 ? "#221c12" : "#2e2617");
+      rect(x0, y, DW, 1, t < 0.35 ? "#2a2216" : "#382e1d");
     }
-    rect(dx, FLOOR_Y - 4, dw, 4, "#241e14");
+    ctx.globalAlpha = 0.13;
+    rect(dx - 4, FLOOR_Y, dw + 8, V.H - FLOOR_Y, "#ffd188");
+    ctx.globalAlpha = 1;
   }
 
   /* A soft cone from the track, plus the pool it throws on the floor.
@@ -1701,29 +1933,37 @@
     const bot = syR(b.y + b.h);
     if (cx < -40 || cx > CW + 40) return;
 
-    let name = (r.era.name || "")
+    const name = (r.era.name || "")
       .replace(/ horizon$/i, "")
       .replace(/ fill$/i, "")
       .replace(/ deposit$/i, "")
       .replace(/^the /i, "");
-    /* Prefer title case on the board — all-caps at this size turns to noise. */
-    if (name.length > 14) name = name.slice(0, 13) + "…";
 
     const n = r.exhibits.length;
     const sub = n + (n === 1 ? " find" : " finds");
     const period = (r.era.period || "").replace(/\s*·.*$/, "");
-    const shortPer = period.length > 16 ? period.slice(0, 14) + "…" : period;
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    /* Title */
+    /* Title, wrapped rather than cut. A board reading "Egyptian gall…" is a
+       board nobody bothered to size, and this is the only place the room is
+       named inside the picture now that the floating plaque is gone. */
+    const inner = Math.round(b.w * SCALE) - 14;
     ctx.font = "600 11px " + FONT_UI;
-    fillTextShadow(name, cx, top + 22, "#e8c66a", "#000000aa");
+    const lines = wrapToWidth(name, inner, 2);
+    let ty = top + (lines.length > 1 ? 17 : 22);
+    for (const line of lines) {
+      fillTextShadow(line, cx, ty, "#e8c66a", "#000000aa");
+      ty += 13;
+    }
     /* Period line */
-    if (shortPer) {
+    if (period) {
       ctx.font = "10px " + FONT_UI;
-      fillTextShadow(shortPer, cx, top + 38, "#c4b896", null);
+      for (const line of wrapToWidth(period, inner, 1)) {
+        fillTextShadow(line, cx, ty + 3, "#c4b896", null);
+        ty += 12;
+      }
     }
     /* Count */
     ctx.font = "10px " + FONT_UI;
@@ -1731,6 +1971,37 @@
 
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
+  }
+
+  /* Greedy word wrap against the current font, capped at `max` lines. Only the
+     last line is ever ellipsised, and only if the words genuinely will not go. */
+  function wrapToWidth(text, width, max) {
+    const words = String(text || "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const out = [];
+    let line = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const next = line + " " + words[i];
+      if (ctx.measureText(next).width <= width) { line = next; continue; }
+      out.push(line);
+      line = words[i];
+      if (out.length === max - 1) {
+        for (let k = i + 1; k < words.length; k++) {
+          const more = line + " " + words[k];
+          if (ctx.measureText(more).width > width) break;
+          line = more;
+        }
+        break;
+      }
+    }
+    out.push(line);
+    /* A single word too long for the board still has to fit somehow. */
+    for (let i = 0; i < out.length; i++) {
+      let t = out[i];
+      while (t.length > 1 && ctx.measureText(t).width > width) t = t.slice(0, -1);
+      if (t !== out[i]) out[i] = t.slice(0, Math.max(1, t.length - 1)) + "…";
+    }
+    return out;
   }
 
   /* The card beside the piece — short, plain, the way a real gallery writes. */
@@ -1837,10 +2108,14 @@
     }
     if (line) lines.push(line);
 
+    /* The pan arrows and the floor picker are HTML sitting on the canvas, so a
+       bubble that slides to the very edge gets a word eaten by a button. Keep
+       clear of both margins. */
+    const EDGE = 44;
     const wide = Math.max(...lines.map((l) => ctx.measureText(l).width));
-    const bw = Math.min(CW - 16, Math.ceil(wide) + 18), bh = lines.length * 15 + 12;
-    const bx = Math.max(4, Math.min(CW - bw - 4, cx - bw / 2));
-    const by = placeBubble(bx, Math.max(4, cy - bh), bw, bh);
+    const bw = Math.min(CW - EDGE * 2, Math.ceil(wide) + 18), bh = lines.length * 15 + 12;
+    const bx = Math.max(EDGE, Math.min(CW - bw - EDGE, cx - bw / 2));
+    const by = placeBubble(bx, Math.max(4, Math.min(CH - bh - 6, cy - bh)), bw, bh);
 
     const fade = Math.min(1, b.t / 0.6) * Math.min(1, (b.life - b.t) / 0.18 + 0.2);
     ctx.globalAlpha = Math.max(0, Math.min(1, fade));
@@ -1868,6 +2143,25 @@
     ctx.textBaseline = "alphabetic";
     lines.forEach((l, i) => ctx.fillText(l, bx + 9, by + 16 + i * 15));
     ctx.globalAlpha = 1;
+  }
+
+  /* Push every storey but the one in focus into the background. Drawn over the
+     finished scene, so it catches rooms, people, cases and labels alike and
+     nothing has to know about it. The band is the full storey pitch, so the
+     boundary always lands on a slab — never through somebody's waist. */
+  function dimInactiveStoreys(shellMin, shellMax) {
+    const focus = floorAtCamera();
+    for (let f = shellMax; f >= shellMin; f--) {
+      if (f === focus) continue;
+      const by = V.floorBase(f);
+      const top = sy(by), h = Math.round(FLOOR_PITCH * SCALE);
+      if (top > CH || top + h < 0) continue;
+      /* One step away is atmosphere; two is nearly gone. */
+      ctx.globalAlpha = Math.abs(f - focus) > 1 ? 0.78 : 0.62;
+      ctx.fillStyle = "#0a0806";
+      ctx.fillRect(0, top, CW, h);
+      ctx.globalAlpha = 1;
+    }
   }
 
   /* ---------- the frame -------------------------------------------------------- */
@@ -1903,6 +2197,13 @@
       ctx.fillStyle = f === 0 ? "#0c0a07" : f > 0 ? "#0e0c08" : "#0a0806";
       ctx.fillRect(0, sy(by), CW, Math.round(FLOOR_PITCH * SCALE));
     }
+
+    /* A roof over the top storey and the deposit under the bottom one. Without
+       these the frame ends in black at both extremes, which is a fifth of the
+       picture spent on nothing. */
+    roomLocal = false;
+    drawRoof(shellMax);
+    drawFoundation(shellMin);
 
     /* Storey shells first (behind open rooms). Every storey gets structure so
        gaps (e.g. above a basement hall that sits past the ground run) aren't
@@ -1969,14 +2270,35 @@
     for (const r of L.rooms) {
       activeFloor = r.floor || 0;
       roomLocal = true;
-      drawRoomPlaque(r);
       drawBoardLabel(r);
       roomLocal = false;
     }
     for (const a of crowd.agents) if (a.paid) drawPaidFloater(a);
     if (selected && !selected.board && L.exhibits.indexOf(selected) >= 0) drawWallLabel(selected);
+    /* Seed the bubble packer with the room boards, so a conversation never
+       lands on top of the one place the gallery is named. */
     bubbleRects = [];
+    for (const r of L.rooms) {
+      if (!roomHasBoard(r)) continue;
+      const bb = boardBox(r);
+      const base = V.floorBase(r.floor || 0);
+      const bx = sx(bb.x) - 4, by = sy(base + bb.y) - 4;
+      const bw = Math.round(bb.w * SCALE) + 8, bh = Math.round(bb.h * SCALE) + 8;
+      if (bx > CW || bx + bw < 0 || by > CH || by + bh < 0) continue;
+      bubbleRects.push({ x: bx, y: by, w: bw, h: bh });
+    }
     for (const a of crowd.agents) drawBubble(a);
+
+    /* Everything that is not the storey you are reading gets pushed back.
+
+       This is the fix for the ugliest thing in the old frame: a neighbouring
+       floor drawn at full brightness and then sliced by the top or bottom edge
+       of the canvas, so the picture was full of half people and benches cut
+       off at the knee. Dimmed, the same crop reads as the rest of the building
+       carrying on past the frame, which is what it is. Last, so it catches the
+       boards and the speech bubbles too. */
+    roomLocal = false;
+    dimInactiveStoreys(shellMin, shellMax);
 
     /* Soft vignette on all edges */
     const gx = ctx.createLinearGradient(0, 0, CW, 0);
@@ -2052,11 +2374,19 @@
     return V.roomAt(layoutCache, camX + VIEW_W / 2, floorAtCamera());
   }
 
+  /* Where to sit the camera to show a room. Centring is right for a room that
+     fits; a hall wider than the frame gets aligned to its opening instead, so
+     you arrive at the intro board rather than halfway down the wall with the
+     board clipped off behind the pan arrow. */
+  function roomCamX(r) {
+    return clampCamX(r.width > VIEW_W - 40 ? r.x - 26 : r.x + r.width / 2 - VIEW_W / 2);
+  }
+
   function goToRoom(i) {
     const rs = rooms();
     if (!rs.length) return;
     const r = rs[Math.max(0, Math.min(rs.length - 1, i))];
-    camTX = clampCamX(r.x + r.width / 2 - VIEW_W / 2);
+    camTX = roomCamX(r);
     camTY = focusFloorY(r.floor != null ? r.floor : 0);
   }
 
@@ -2069,7 +2399,7 @@
                    rs.find((r) => !r.stairs && !r.foyer) ||
                    rs.find((r) => !r.stairs) ||
                    rs[0];
-    if (prefer) camTX = clampCamX(prefer.x + prefer.width / 2 - VIEW_W / 2);
+    if (prefer) camTX = roomCamX(prefer);
   }
 
   function nudge(dir) {
@@ -2082,6 +2412,7 @@
   S7.galleryView = {
     init, draw, rooms, currentRoom, goToRoom, goToFloor, nudge, invalidate,
     setArrange, isArranging, isDragging, probe, clearSelection, resizeCanvas,
+    debugCam: (x, y) => { camX = camTX = clampCamX(x); camY = camTY = clampCamY(y); },
     get CW() { return CW; },
     get CH() { return CH; },
     get VIEW_W() { return VIEW_W; },
