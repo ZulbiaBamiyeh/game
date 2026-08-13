@@ -616,44 +616,146 @@
 
   function drawStairs(r) {
     const x0 = r.x, w = r.width;
-    const goingUp = (r.stairsTo || 0) > (r.floor || 0);
-    /* Stone stair hall */
-    ctx.globalAlpha = 0.14;
-    rect(x0, WALL_TOP, w, FLOOR_Y - WALL_TOP, goingUp ? "#3a4a5a" : "#3a3830");
-    ctx.globalAlpha = 1;
-    /* Steps */
-    for (let i = 0; i < 8; i++) {
-      const y = FLOOR_Y - 8 - i * 8;
-      const inset = goingUp ? i * 4 : (7 - i) * 4;
-      rect(x0 + 18 + inset, y, w - 36 - inset * 1.2, 7, i % 2 ? "#5a5040" : "#4a4030");
-      rect(x0 + 18 + inset, y, w - 36 - inset * 1.2, 1, "#7a6a50");
+    /* Everything here is clipped to its own storey, and the flight itself is
+       drawn from the same world-space line that visitors actually walk (see
+       stairPath in visitors.js). Both halls draw the whole line; the clip
+       decides which part of it each one shows. So the bottom three-quarters
+       appear in the storey the flight rises through, the last few treads
+       emerge from the floor of the storey it serves, and a person on the
+       stairs has a tread under their feet the whole way instead of floating
+       clear of them for the last stretch. */
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx(x0) - 1, syR(0), Math.round(w * SCALE) + 2, Math.round(V.H * SCALE));
+    ctx.clip();
+    drawStairsInner(r, x0, w);
+    ctx.restore();
+  }
+
+  function drawStairsInner(r, x0, w) {
+    const carriesFlight = (r.stairsTo || 0) > (r.floor || 0);
+    const lower = Math.min(r.floor || 0, r.stairsTo || 0);
+    const upper = Math.max(r.floor || 0, r.stairsTo || 0);
+    const path = layoutCache && V.stairPath ? V.stairPath(layoutCache, lower, upper) : null;
+
+    /* Stone stair hall — cooler than a gallery, and lighter at the top. */
+    for (let y = WALL_TOP; y < FLOOR_Y; y++) {
+      const t = (y - WALL_TOP) / (FLOOR_Y - WALL_TOP);
+      rect(x0, y, w, 1, t < 0.3 ? "#3b3a30" : t < 0.7 ? "#332f26" : "#2b271f");
     }
-    /* Banisters + gold handrail */
-    rect(x0 + 14, 40, 3, FLOOR_Y - 40, "#3a3426");
-    rect(x0 + w - 17, 40, 3, FLOOR_Y - 40, "#3a3426");
-    rect(x0 + 12, 38, w - 24, 3, "#c79a42");
-    rect(x0 + 12, 38, w - 24, 1, "#e8c66a");
-    /* Direction plate */
-    const label = goingUp ? "UP" : "DOWN";
-    rect(x0 + w / 2 - 18, 42, 36, 14, "#1a160d");
-    rect(x0 + w / 2 - 18, 42, 36, 2, "#c79a42");
+    /* A tall window, because stair halls always have one. */
+    const wx = x0 + 40;
+    rect(wx, 30, 15, 46, "#2a2a26");
+    rect(wx + 2, 32, 11, 42, "#59636b");
+    rect(wx + 3, 33, 4, 18, "#77858c");
+    rect(wx + 2, 52, 11, 1, "#2a2a26");
+    rect(wx, 30, 15, 2, "#4c463a");
+    ctx.globalAlpha = 0.09;
+    ctx.fillStyle = "#cfe2ee";
+    ctx.fillRect(sx(wx - 8), syR(76), Math.round(30 * SCALE), Math.round((FLOOR_Y - 76) * SCALE));
+    ctx.globalAlpha = 1;
+
+    /* The floor of this hall. */
+    for (let y = FLOOR_Y; y < V.H; y++) {
+      const t = (y - FLOOR_Y) / (V.H - FLOOR_Y);
+      rect(x0, y, w, 1, t < 0.2 ? "#2f2a20" : t < 0.6 ? "#3b3527" : "#453e2d");
+    }
+    rect(x0, FLOOR_Y - 5, w, 5, "#4a4432");
+    rect(x0, FLOOR_Y - 5, w, 1, "#6d6247");
+
+    if (!path) { drawStairSign(r, x0, carriesFlight); return; }
+
+    /* The line, in world y. `foot` is always the bottom of it. */
+    const lo = path.from.y > path.to.y ? path.from : path.to;
+    const hi = path.from.y > path.to.y ? path.to : path.from;
+    const base = V.floorBase(r.floor || 0);
+    const localAt = (wy) => wy - base;           /* world y -> this hall's local y */
+    const at = (t) => ({ x: lo.x + (hi.x - lo.x) * t, y: lo.y + (hi.y - lo.y) * t });
+
+    /* On the upper hall the flight comes up through the floor, so cut the well
+       before drawing anything on it. */
+    if (!carriesFlight) {
+      const a0 = at(0.80), a1 = at(1);
+      const oX = Math.min(a0.x, a1.x) - 10, oW = Math.abs(a1.x - a0.x) + 26;
+      ctx.globalAlpha = 0.6;
+      rect(oX, FLOOR_Y, oW, V.H - FLOOR_Y, "#0d0b07");
+      ctx.globalAlpha = 1;
+      rect(oX, FLOOR_Y - 2, oW, 3, "#4a4432");
+      rect(oX, FLOOR_Y - 2, oW, 1, "#6d6247");
+      r._wellX = oX; r._wellW = oW;
+    }
+
+    /* Treads. Stepped in world space so both halls agree on where they are. */
+    const STEPS = 17;
+    for (let i = 0; i < STEPS; i++) {
+      const b = at(i / STEPS), n = at((i + 1) / STEPS);
+      const by = localAt(b.y), ny = localAt(n.y);
+      if (ny > V.H + 10 || by < -10) continue;
+      const tw = Math.max(4, Math.abs(n.x - b.x)) + 3;
+      const rh = Math.max(3, by - ny);
+      const bx = Math.min(b.x, n.x);
+      rect(bx, ny + 3, tw - 1, rh, "#332e21");                  /* riser */
+      rect(bx, ny + 3, 2, rh, "#453d2c");
+      rect(bx, ny, tw, 4, i % 2 ? "#6f6349" : "#655a3e");       /* tread */
+      rect(bx, ny, tw, 1, "#9b8c69");                           /* nosing */
+      rect(bx, ny + 3, tw, 1, "#241f16");
+    }
+
+    /* Stringer, handrail and balusters, on the same rake. */
+    const RAIL = 17;
+    ctx.strokeStyle = "#8a6a2c";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sx(lo.x), syR(localAt(lo.y) - RAIL + 2));
+    ctx.lineTo(sx(hi.x + 2), syR(localAt(hi.y) - RAIL + 2));
+    ctx.stroke();
+    ctx.strokeStyle = "#c79a42";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(sx(lo.x), syR(localAt(lo.y) - RAIL));
+    ctx.lineTo(sx(hi.x + 2), syR(localAt(hi.y) - RAIL));
+    ctx.stroke();
+    for (let i = 0; i <= 11; i++) {
+      const q = at(i / 11);
+      rect(q.x, localAt(q.y) - RAIL + 2, 2, RAIL - 3, "#544a36");
+    }
+
+    if (carriesFlight) {
+      /* Newel at the bottom, where people step on. */
+      rect(lo.x - 4, localAt(lo.y) - RAIL - 5, 5, RAIL + 5, "#4a4130");
+      rect(lo.x - 5, localAt(lo.y) - RAIL - 8, 7, 4, "#6b5a3a");
+    } else if (r._wellX !== undefined) {
+      /* Balustrade round the opening in this floor. */
+      const oX = r._wellX, oW = r._wellW;
+      ctx.strokeStyle = "#c79a42";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(sx(oX - 2), syR(FLOOR_Y - 26));
+      ctx.lineTo(sx(oX + oW + 2), syR(FLOOR_Y - 26));
+      ctx.stroke();
+      for (let px = oX; px <= oX + oW; px += 9) rect(px, FLOOR_Y - 25, 1, 23, "#4a4130");
+      rect(oX - 4, FLOOR_Y - 31, 5, 30, "#4a4130");
+      rect(oX + oW, FLOOR_Y - 31, 5, 30, "#4a4130");
+      rect(oX - 5, FLOOR_Y - 34, 7, 4, "#6b5a3a");
+      rect(oX + oW - 1, FLOOR_Y - 34, 7, 4, "#6b5a3a");
+      /* A notice board, so the landing is not a bare stone box. */
+      rect(x0 + 14, 44, 20, 26, "#2b2519");
+      rect(x0 + 14, 44, 20, 2, "#5a4e35");
+      for (let i = 0; i < 5; i++) rect(x0 + 17, 50 + i * 4, 12 + (i % 2) * 3, 1, "#4f4735");
+    }
+
+    drawStairSign(r, x0, carriesFlight);
+  }
+
+  function drawStairSign(r, x0, carriesFlight) {
+    const label = carriesFlight ? "UP" : "DOWN";
+    const px = x0 + 22;
+    rect(px - 19, 16, 38, 13, "#1a160d");
+    rect(px - 19, 16, 38, 2, "#c79a42");
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "700 10px " + FONT_UI;
-    fillTextShadow(label, sx(x0 + w / 2), syR(50), "#e8c66a", "#00000088");
-    /* Arrow chevron */
-    const ax = x0 + w / 2, ay = goingUp ? 62 : 100;
-    rect(ax - 1, goingUp ? 58 : 70, 2, 18, "#c79a42");
-    if (goingUp) {
-      rect(ax - 4, 60, 3, 3, "#c79a42");
-      rect(ax + 1, 60, 3, 3, "#c79a42");
-      rect(ax - 2, 58, 5, 2, "#e8c66a");
-    } else {
-      rect(ax - 4, 84, 3, 3, "#c79a42");
-      rect(ax + 1, 84, 3, 3, "#c79a42");
-      rect(ax - 2, 86, 5, 2, "#e8c66a");
-    }
-    drawPlant(x0 + w - 20);
+    fillTextShadow(label, sx(px), syR(23), "#e8c66a", "#00000088");
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
   }
@@ -1658,13 +1760,20 @@
   /* Museum lighting: the thing in the light is brighter than the wall it hangs
      on. Without this everything sits at the same value and the room goes flat.
      Upgraded fittings push more of that warmth onto the work itself. */
-  function lightArt(b, aw, ah) {
+  function lightArt(b, aw, ah, art) {
     const light = fac ? fac.lighting : 0;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = 0.06 + Math.min(0.22, light * 0.016);
-    ctx.fillStyle = "#ffe0a8";
-    ctx.fillRect(sx(b.x), sy(b.y), aw, ah);
+    if (art) {
+      /* Light the artwork through its own alpha. Filling the bounding box
+         instead lit the transparent margin too, so a tall piece sat inside a
+         pale slab that read as a pane of frosted glass bolted to the wall. */
+      ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
+    } else {
+      ctx.fillStyle = "#ffe0a8";
+      ctx.fillRect(sx(b.x), sy(b.y), aw, ah);
+    }
     ctx.restore();
   }
 
@@ -1700,7 +1809,7 @@
       ctx.fillStyle = "#00000055";
       ctx.fillRect(sx(b.x) + 3, sy(b.y) + 4, aw, ah);
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
-      lightArt(b, aw, ah);
+      lightArt(b, aw, ah, art);
       if (ring) outlineBox(b, ring);
       if (b.y > railW + 2) rect(e.x - 1, railW, 1, b.y - railW, "#5a4e35");
     } else if (e.mount === "plinth" || e.mount === "outdoor") {
@@ -1736,7 +1845,7 @@
         }
       }
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
-      lightArt(b, aw, ah);
+      lightArt(b, aw, ah, art);
       if (ring) outlineBox(b, ring);
       if (e.mount !== "outdoor" && plinths >= 1) {
         const rw = Math.max(pw + 8, 26);
@@ -1760,7 +1869,7 @@
       rect(e.x - pw / 2, floorW + 5, pw, 3, C.pedShade);
 
       ctx.drawImage(art, sx(b.x), sy(b.y), aw, ah);
-      lightArt(b, aw, ah);
+      lightArt(b, aw, ah, art);
 
       if (cases > 0) {
         const glassA = 0.10 + Math.min(0.16, cases * 0.008);
@@ -2198,8 +2307,11 @@
     camTY = clampCamY(camTY);
 
     if (!dragging) {
-      camX += (camTX - camX) * Math.min(1, dt * 8);
-      camY += (camTY - camY) * Math.min(1, dt * 8);
+      /* Camera drift can be switched off in the Site Office — some people read
+         a smooth pan as lag, and some cannot look at one at all. */
+      const k = (S.flags && S.flags.noDrift) ? 1 : Math.min(1, dt * 8);
+      camX += (camTX - camX) * k;
+      camY += (camTY - camY) * k;
     }
 
     ctx.imageSmoothingEnabled = false;
@@ -2300,6 +2412,9 @@
     /* Seed the bubble packer with the room boards, so a conversation never
        lands on top of the one place the gallery is named. */
     bubbleRects = [];
+    /* The floor picker is HTML sitting over the top-right corner of the canvas;
+       a bubble that lands under it loses half its words. */
+    if (shellMax > shellMin) bubbleRects.push({ x: CW - 150, y: 0, w: 150, h: 108 });
     for (const r of L.rooms) {
       if (!roomHasBoard(r)) continue;
       const bb = boardBox(r);

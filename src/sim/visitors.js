@@ -34,7 +34,10 @@
      spread over that is about three in any one view, which reads as a museum
      on a wet Tuesday whatever the header claims. */
   const MAX_AGENTS = 96;
-  const STAIRS_W = 88;
+  /* A flight rising a whole storey across 42 pixels of run is a ladder. Wide
+     enough that the rake comes out near 1.4:1, which is what a stair looks
+     like. */
+  const STAIRS_W = 152;
 
   /* The entrance hall, which every museum has and which is where the money
      actually changes hands. */
@@ -953,17 +956,46 @@
     ? BENCH_Y : WALK_FAR + a.z * (WALK_NEAR - WALK_FAR));
   /* During climb, lerp world Y between storeys so the cutaway shows people
      actually going up and down the stair well. */
+  const climbT = (a) => {
+    if (!a.climb || !(a.climb.duration > 0)) return 0;
+    return Math.max(0, Math.min(1, 1 - a.timer / a.climb.duration));
+  };
   const feetY = (a) => {
+    if (a.state === "climb" && a.climb && a.climb.path) {
+      const p = a.climb.path;
+      /* Linear in y: a staircase is a ramp, and easing it makes people
+         hesitate in mid-air halfway up. */
+      return p.from.y + (p.to.y - p.from.y) * climbT(a);
+    }
     if (a.state === "climb" && a.climb && a.climb.duration > 0) {
-      const t = 1 - Math.max(0, Math.min(1, a.timer / a.climb.duration));
-      const ease = t * t * (3 - 2 * t);
       const y0 = worldY(a.climb.fromFloor, BENCH_Y - 4);
       const y1 = worldY(a.climb.toFloor, BENCH_Y - 4);
-      return y0 + (y1 - y0) * ease;
+      return y0 + (y1 - y0) * climbT(a);
     }
     return worldY(a.floor || 0, localFeetY(a));
   };
   const scaleOf = (a) => (0.82 + a.z * 0.30) * a.def.scale;
+
+  /* The flight between two storeys is drawn in the lower one and arrives
+     through the slab into the upper; both halls share an x. This returns the
+     two ends of it in world coordinates, so a climb is one continuous diagonal
+     instead of a vertical float with a sideways teleport at each end. */
+  function stairPath(L, fromFloor, toFloor) {
+    if (!L || !L.stairs) return null;
+    const lower = Math.min(fromFloor, toFloor);
+    const upper = Math.max(fromFloor, toFloor);
+    let hall = null;
+    for (const st of L.stairs)
+      if ((st.floor || 0) === lower && st.stairsTo === upper) { hall = st; break; }
+    if (!hall) for (const st of L.stairs)
+      if ((st.floor || 0) === upper && st.stairsTo === lower) { hall = st; break; }
+    if (!hall) return null;
+    const foot = { x: hall.x + 22, y: worldY(lower, 148) };
+    const head = { x: hall.x + hall.width - 24, y: worldY(upper, 140) };
+    return toFloor > fromFloor
+      ? { from: foot, to: head, hall }
+      : { from: head, to: foot, hall };
+  }
 
   function stairsOnFloor(L, floor) {
     if (!L || !L.stairs) return null;
@@ -1266,35 +1298,58 @@
       } else if (a.state === "toStairs") {
         const st = a.climb && a.climb.stairs;
         if (!st) { a.climb = null; a.state = "walk"; continue; }
-        const gx = st.serviceX || (st.x + st.width / 2);
+        const from = a.floor || 0;
+        const to = st.stairsTo;
+        const path = stairPath(L, from, to);
+        /* Walk to the foot of the flight, not to the middle of the room — the
+           middle is where people used to snap sideways from. */
+        const gx = path ? path.from.x : (st.serviceX || (st.x + st.width / 2));
         a.z += (0.5 - a.z) * dt * 0.8;
         if (approach(a, gx, dt, 1.3, 3) || (a.stateAge || 0) > 16) {
           a.x = gx;
           a.state = "climb";
-          const dur = rng.range(1.6, 2.8);
+          /* Time it by the length of the flight so everybody climbs at the
+             same speed rather than at the same duration. */
+          const rise = path ? Math.abs(path.to.y - path.from.y) : FLOOR_PITCH;
+          const dur = (rise / 62) * rng.range(0.92, 1.12);
           a.timer = dur;
           if (a.climb) {
             a.climb.duration = dur;
-            a.climb.fromFloor = a.floor || 0;
-            a.climb.toFloor = st.stairsTo;
+            a.climb.fromFloor = from;
+            a.climb.toFloor = to;
+            a.climb.path = path;
           }
           a.stateAge = 0;
           a.stuck = 0;
         }
       } else if (a.state === "climb") {
         a.timer -= dt;
-        a.phase += dt * 3;
-        /* Bob on the stairs while rising/descending between storeys. */
-        a.z = 0.45 + Math.sin(a.phase * 4) * 0.08;
+        a.phase += dt * 5.5;
+        /* Travel the flight: x and y together, so they walk up the steps
+           instead of rising through the ceiling on the spot. */
+        if (a.climb && a.climb.path) {
+          const p = a.climb.path;
+          const t = climbT(a);
+          const nx = p.from.x + (p.to.x - p.from.x) * t;
+          a.dir = nx >= a.x ? 1 : -1;
+          a.x = nx;
+        }
+        /* Fixed depth on the stairs — bobbing z only ever flickered the
+           brightness, which read as a fault rather than as a footfall. */
+        a.z = 0.46;
         if (a.timer <= 0) {
           const from = a.climb ? a.climb.fromFloor : (a.floor || 0);
           const to = a.climb ? a.climb.toFloor : 0;
           const after = a.climb ? a.climb.after : null;
+          const path = a.climb && a.climb.path;
           a.floor = to;
           /* New storey, fresh appetite for it. */
           a.floorVisits = 0;
-          const land = stairsLanding(L, to, from);
-          if (land) a.x = land.serviceX || (land.x + land.width / 2);
+          if (path) a.x = path.to.x;
+          else {
+            const land = stairsLanding(L, to, from);
+            if (land) a.x = land.serviceX || (land.x + land.width / 2);
+          }
           a.climb = null;
           a.stuck = 0;
           a.stateAge = 0;
@@ -1694,7 +1749,7 @@
 
   S7.visitors = {
     create, step, layout, getLayout, invalidate, reseat, place, roomAt, feetY, scaleOf,
-    floorBase, worldY, floorLabel, stairsOnFloor, localFeetY,
+    floorBase, worldY, floorLabel, stairsOnFloor, stairPath, localFeetY,
     H, FLOOR_Y, FLOOR_PITCH, WALK_NEAR, WALK_FAR, ROOM_PAD, EXHIBIT_GAP, DOOR, BENCH_Y, MAX_AGENTS,
     FOYER_W, DOOR_X, DESK_X, DESK_W, STAIRS_W,
   };

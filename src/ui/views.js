@@ -265,6 +265,7 @@
       '<div><div class="mk">' + esc(m[0]) + '</div><div class="mv">' + esc(m[1]) + '</div></div>').join("");
 
     renderTill(S, sv);
+    renderAdvice(S, sv);
 
     const pct = sv.cap ? Math.min(100, 100 * sv.count / sv.cap) : 0;
     const fill = $("capfill");
@@ -379,6 +380,38 @@
      Admission price is the one number the player sets directly, and it cuts
      both ways: charge over the going rate and the gate thins out. */
 
+  /* The to-do list. A tycoon game that only reports a score is a spreadsheet;
+     this is the part that tells you what to do about it. */
+  function renderAdvice(S, sv) {
+    const box = $("advice");
+    if (!box) return;
+    const items = M.advice(S, sv);
+    const note = $("advice-note");
+    if (note) note.textContent = items.length
+      ? items.length + (items.length === 1 ? " thing" : " things")
+      : "nothing pressing";
+    if (!items.length) {
+      box.innerHTML = '<p class="hint nowt">Nothing needs you. The place is running itself — ' +
+        'which means it is time to dig.</p>';
+      return;
+    }
+    box.innerHTML = items.map((it) =>
+      '<div class="adv' + (it.fix ? " has-fix" : "") + '"' +
+      (it.fix ? ' data-fix="' + esc(it.fix) + '"' : "") + ">" +
+      '<div class="advt">' + esc(it.title) + "</div>" +
+      '<div class="advb">' + esc(it.body) + "</div>" +
+      "</div>").join("");
+    for (const el of box.querySelectorAll("[data-fix]"))
+      el.addEventListener("click", () => {
+        const id = el.getAttribute("data-fix");
+        const row = document.querySelector('[data-buy="' + id + '"]');
+        if (!row) return;
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+        row.classList.add("flash");
+        setTimeout(() => row.classList.remove("flash"), 1200);
+      });
+  }
+
   function renderTill(S, sv) {
     const box = $("till");
     if (!box) return;
@@ -489,6 +522,28 @@
       '<p class="' + l.c + '"><span class="d">' + (l.at !== undefined ? l.at.toFixed(0) + "m" : "") + '</span>' + l.t + '</p>';
     $("log-full").innerHTML = S.log.map(line).join("");
     $("log-mini").innerHTML = S.log.slice(0, 14).map(line).join("");
+
+    /* Milestones beside the log — the tab used to be one narrow panel in half
+       a screen of nothing. Held ones read plainly; the rest stay unnamed, so
+       the list is a horizon rather than a spoiler. */
+    const box = $("milestones");
+    if (!box) return;
+    const all = S7.game.MILESTONES || [];
+    const held = all.filter((m) => S.milestones[m.id]);
+    const note = $("ms-note");
+    if (note) note.textContent = held.length + " of " + all.length;
+    const rows = held.map((m) =>
+      '<div class="msrow done"><span class="mstick">✓</span>' + m.text + "</div>");
+    const left = all.length - held.length;
+    if (left > 0) {
+      for (let i = 0; i < Math.min(3, left); i++)
+        rows.push('<div class="msrow"><span class="mstick">·</span>' +
+          '<span class="msunknown">Not yet.</span></div>');
+      if (left > 3)
+        rows.push('<div class="msrow"><span class="mstick">·</span>' +
+          '<span class="msunknown">and ' + (left - 3) + ' further down.</span></div>');
+    }
+    box.innerHTML = rows.join("");
   }
 
   S7.views = {

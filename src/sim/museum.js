@@ -246,6 +246,127 @@
     return "There is nothing else like it. The Hollow Museum is the only place this sequence is known.";
   }
 
+  /* ---------- what needs attention -------------------------------------------
+     A tycoon game diagnoses. It is not enough to show a rating and a verdict:
+     the player needs to know *why* it is what it is and what the next useful
+     thing to do about it is. Everything here is read off state that is already
+     computed for other purposes, ranked so the most expensive mistake is at
+     the top, and capped so the panel is a to-do list rather than a wall.
+
+     `fix` is the upgrade id to nudge toward, if there is one. */
+
+  function advice(S, sv) {
+    const out = [];
+    const add = (w, id, title, body, fix) => out.push({ w, id, title, body, fix });
+    const stored = S.collection.length - sv.count;
+    const cap = sv.cap;
+    const price = S.admission;
+    const suggested = suggestedPrice(sv);
+    const lvl = (id) => S.up[id] || 0;
+    const cost = (id) => S7.upgrades.cost(S, S7.upgrades.ALL[id]);
+    const afford = (id) => S7.upgrades.ALL[id] && S.funds >= cost(id);
+
+    if (sv.count === 0) {
+      add(100, "closed", "The doors are shut",
+          "Nothing is on display, so nobody is coming. Accession a find and put it on show.");
+      return out;
+    }
+
+    /* Overcrowding is the most expensive thing a player does by accident. */
+    if (sv.count > cap) {
+      const lost = Math.round((1 - sv.crowd) * 100);
+      add(90, "crowded", "Overcrowded galleries",
+          sv.count + " pieces in space for " + cap + ". The clutter is costing you " +
+          lost + "% of the rating." +
+          (S7.upgrades.ALL.cases ? " Cases are " + Math.round(cost("cases")) + "." : ""),
+          "cases");
+    } else if (stored > 0 && sv.count < cap) {
+      add(70, "store", "Space going spare",
+          stored + " piece" + (stored === 1 ? "" : "s") + " in store and room for " +
+          (cap - sv.count) + " more on the walls. Anything in store earns you nothing at the door.");
+    }
+
+    /* Pricing, in both directions. */
+    if (price > suggested * 1.45) {
+      add(76, "dear", "The ticket is over the odds",
+          "You charge " + price + " against a going rate of " + suggested +
+          ". Footfall is down to " + Math.round(priceFactor(S, sv) * 100 / 1.6) +
+          "% of what a free door would draw, and the grant follows the turnstile.");
+    } else if (price < suggested * 0.55 && sv.rating > 6) {
+      add(58, "cheap", "You are underselling the place",
+          "A collection at " + sv.rating.toFixed(0) + "/100 could ask " + suggested +
+          ". You are asking " + price + ".");
+    }
+
+    /* Rooms that are barely rooms. */
+    let thin = 0, thinName = "";
+    const byEra = {};
+    for (const a of sv.shown) {
+      const e = S7.cultures.eraAt(a.depth);
+      byEra[e.id] = byEra[e.id] || { n: 0, name: e.name };
+      byEra[e.id].n++;
+    }
+    for (const k in byEra) if (byEra[k].n === 1) { thin++; thinName = byEra[k].name; }
+    if (thin >= 2) {
+      add(48, "thin", thin + " galleries with one piece in them",
+          "A room hung with a single object reads as an empty room. Dig on, or move " +
+          "pieces together with Rehang until each band has something to say.");
+    } else if (thin === 1) {
+      add(30, "thin1", "A gallery with one piece in it",
+          thinName + " has a single object on show.");
+    }
+
+    /* Amenities that pay for themselves. */
+    if (lvl("shop") === 0 && S.stats.visitorsTotal >= 40) {
+      add(62, "shop", "No gift shop",
+          "Every visitor walks past where it would be. A shop takes money from people " +
+          "who have already paid to get in." + (afford("shop") ? " You can afford one." : ""),
+          "shop");
+    }
+    if (lvl("cafe") === 0 && lvl("shop") > 0 && S.stats.visitorsTotal >= 150) {
+      add(50, "cafe", "No café",
+          "The café is the second most profitable room in any museum, and it makes " +
+          "people stay longer, which makes them spend more.",
+          "cafe");
+    }
+    if (lvl("upper") === 0 && S.collection.length >= 18 && afford("upper")) {
+      add(56, "upper", "A second storey is affordable",
+          "You have the collection for it and the money for it. More floor is more " +
+          "display space and more reason to come.",
+          "upper");
+    }
+
+    /* Understanding sitting in the bank does nothing at all. */
+    const nextRes = S7.upgrades.RESEARCH.find((r) => !S.research[r.id]);
+    if (nextRes && S.understanding >= nextRes.cost) {
+      add(66, "research", "Research waiting to be bought",
+          "You are holding " + Math.round(S.understanding) + " Understanding and " +
+          nextRes.name + " costs " + nextRes.cost + ". It buys what money cannot.");
+    }
+
+    /* One piece from a complete tradition is the most motivating fact you can
+       show somebody who is deciding whether to keep digging. */
+    const sets = setsFor(S);
+    const nearly = sets.filter((x) => !x.complete && x.want - x.have === 1);
+    if (nearly.length) {
+      add(44, "set", nearly.length === 1
+            ? "One piece from completing " + nearly[0].culture.name
+            : nearly.length + " traditions are one piece from complete",
+          "Completing a tradition is a permanent standing bonus.");
+    }
+
+    /* Light is the cheapest rating in the game and players miss it. */
+    if (lvl("lighting") < 3 && afford("lighting")) {
+      add(40, "lighting", "The galleries are underlit",
+          "Most of what a museum sells is light. It is also the cheapest rating on " +
+          "the list at " + Math.round(cost("lighting")) + ".",
+          "lighting");
+    }
+
+    out.sort((a, b) => b.w - a.w);
+    return out.slice(0, 4);
+  }
+
   /* Culture set completion — the long-tail collection goal. */
   function setsFor(S) {
     const held = {};
@@ -272,6 +393,6 @@
     suggestedPrice, priceFactor, visitorsPerDay, arrivalRate, PEAK_DAY,
     baseExtra, shopSpend, cafeSpend, amenityRates, amenityExpected,
     secondarySpend, perVisitor, standingIncome, projectedDay, incomeRate,
-    stars, verdict, setsFor,
+    stars, verdict, setsFor, advice,
   };
 })(window.S7 = window.S7 || {});

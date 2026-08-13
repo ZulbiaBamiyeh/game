@@ -6,7 +6,7 @@
 (function (S7) {
   "use strict";
   const V = S7.views, G = S7.game, M = S7.museum, U = S7.upgrades;
-  const $ = V.$;
+  const $ = V.$, esc = V.esc, fmt = V.fmt;
 
   let S = null;
   let crowd = null;                 /* the people walking around the museum */
@@ -242,17 +242,76 @@
 
   /* ---------- menu ------------------------------------------------------------- */
 
+  /* The Site Office. It used to be four buttons about save files, which is a
+     dialog, not a menu. A tycoon game's menu is where you go to find out how
+     you are doing — so this is the run's record first, the switches second,
+     and the save handling last where it belongs. */
+  function menuStat(k, v, note) {
+    return '<div class="mstat"><div class="mk">' + esc(k) + "</div>" +
+      '<div class="mv">' + esc(v) + "</div>" +
+      (note ? '<div class="mn">' + esc(note) + "</div>" : "") + "</div>";
+  }
+
   function openMenu() {
+    const sv = S7.museum.survey(S);
+    const sets = S7.museum.setsFor(S);
+    const done = sets.filter((x) => x.complete).length;
+    const acc = S.stats.filed ? Math.round(100 * S.stats.correct / S.stats.filed) : 0;
+    const best = S.stats.bestDay || 0;
+    const milestones = S7.game.MILESTONES || [];
+    const hit = milestones.filter((m) => S.milestones[m.id]).length;
+
     $("menu-body").innerHTML =
+      '<div class="msec"><div class="mhead">The run so far</div>' +
+      '<div class="mstats">' +
+        menuStat("Depth reached", S.depth.toFixed(1) + " m",
+                 S7.game.siteName(S) + (S.sites > 1 ? " · site " + S.sites : "")) +
+        menuStat("Accessioned", fmt(S.stats.accessioned),
+                 sv.count + " on show, " + Math.max(0, S.collection.length - sv.count) + " in store") +
+        menuStat("Museum rating", sv.rating.toFixed(1) + " / 100", S7.views.starString(sv.rating)) +
+        menuStat("Visitors to date", fmt(S.stats.visitorsTotal),
+                 "best day " + fmt(Math.round(best))) +
+        menuStat("Taken at the door", fmt(Math.round(S.stats.earned)),
+                 "over " + (S.day > 1 ? S.day + " days" : "one day")) +
+        menuStat("Interpretations", fmt(S.stats.filed),
+                 S.stats.filed ? acc + "% read correctly" : "none filed yet") +
+        menuStat("Traditions complete", done + " / " + sets.length,
+                 "a set is every form a culture made") +
+        menuStat("Time on site", S7.views.fmtTime(S.stats.playtime),
+                 hit + " of " + milestones.length + " milestones") +
+      "</div></div>" +
+
+      '<div class="msec"><div class="mhead">Settings</div>' +
+      '<div class="rowbtns">' +
+      '<button class="action" id="mn-sound"><span class="bt">Sound: ' +
+        (S7.audio.isEnabled() ? "on" : "off") + "</span>" +
+      '<span class="bd">Generative room tone, footsteps and the drill.</span></button>' +
+      '<button class="action" id="mn-motion"><span class="bt">Camera drift: ' +
+        (S.flags.noDrift ? "off" : "on") + "</span>" +
+      '<span class="bd">Smooth panning when you jump between rooms and floors.</span></button>' +
+      "</div></div>" +
+
+      '<div class="msec"><div class="mhead">Save</div>' +
       '<p class="hint">Progress saves to this browser automatically. The save is a short ' +
-      'text string — every artifact is stored as the seed that generated it.</p>' +
+      'text string — every artifact is stored as the seed that generated it, which is why ' +
+      'a collection of two hundred pieces fits in a few kilobytes.</p>' +
       '<div class="rowbtns">' +
       '<button class="action" id="mn-export"><span class="bt">Copy save to clipboard</span></button>' +
       '<button class="action" id="mn-import"><span class="bt">Restore from a save string</span></button>' +
       '</div>' +
       '<div class="rowbtns"><button class="action" id="mn-wipe">' +
       '<span class="bt dangerous">Abandon the museum and start again</span>' +
-      '<span class="bd">Deletes the collection. There is no undo.</span></button></div>';
+      '<span class="bd">Deletes the collection. There is no undo.</span></button></div></div>';
+
+    $("mn-sound").addEventListener("click", () => {
+      S7.audio.setEnabled(!S7.audio.isEnabled());
+      renderMuteButton();
+      openMenu();
+    });
+    $("mn-motion").addEventListener("click", () => {
+      S.flags.noDrift = !S.flags.noDrift;
+      openMenu();
+    });
 
     $("mn-export").addEventListener("click", () => {
       const text = S7.save.exportText(S);
